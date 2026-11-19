@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PUBLIC_PATHS = ["/login", "/auth"];
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -33,7 +35,22 @@ export async function proxy(request: NextRequest) {
 
   // Refresh the session if it's expired. Required for Server Components,
   // which can't write cookies themselves.
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const path = request.nextUrl.pathname;
+  const isPublicPath = PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(`${p}/`),
+  );
+
+  if (!user && !isPublicPath) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  if (user && path === "/login") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
 
   return response;
 }
