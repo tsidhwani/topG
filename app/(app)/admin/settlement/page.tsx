@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDefaultWeek } from "@/lib/weeks";
 import { markUserWeekSettled } from "@/lib/actions/settlement";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,9 +39,8 @@ export default async function SettlementPage({
 }) {
   const params = await searchParams;
   const season = Number(params.season) || new Date().getFullYear();
-  const week = Number(params.week) || 1;
-
   const supabase = await createClient();
+  const week = Number(params.week) || (await getDefaultWeek(supabase, season));
 
   const { data: betsData } = await supabase
     .from("bets")

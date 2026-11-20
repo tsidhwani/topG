@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDefaultWeek } from "@/lib/weeks";
 import { confirmWeekGraded } from "@/lib/actions/grading";
 import { GradingForm } from "@/components/admin/grading-form";
 import { Badge } from "@/components/ui/badge";
@@ -29,9 +30,8 @@ export default async function AdminGradingPage({
 }) {
   const params = await searchParams;
   const season = Number(params.season) || new Date().getFullYear();
-  const week = Number(params.week) || 1;
-
   const supabase = await createClient();
+  const week = Number(params.week) || (await getDefaultWeek(supabase, season));
 
   const { data: weekRow } = await supabase
     .from("weeks")

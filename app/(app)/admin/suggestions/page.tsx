@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDefaultWeek } from "@/lib/weeks";
 import { acceptSuggestion, dismissSuggestion } from "@/lib/actions/suggestions";
 import { GenerateSuggestionsButton } from "@/components/admin/generate-suggestions-button";
 import { Button } from "@/components/ui/button";
@@ -31,9 +32,8 @@ export default async function AdminSuggestionsPage({
 }) {
   const params = await searchParams;
   const season = Number(params.season) || new Date().getFullYear();
-  const week = Number(params.week) || 1;
-
   const supabase = await createClient();
+  const week = Number(params.week) || (await getDefaultWeek(supabase, season));
 
   const { data: suggestionsData } = await supabase
     .from("suggestions")

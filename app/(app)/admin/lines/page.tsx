@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDefaultWeek } from "@/lib/weeks";
 import { upsertWeek, publishWeek } from "@/lib/actions/admin-lines";
 import { MarketForm } from "@/components/admin/market-form";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,8 @@ export default async function AdminLinesPage({
 }) {
   const params = await searchParams;
   const season = Number(params.season) || new Date().getFullYear();
-  const week = Number(params.week) || 1;
-
   const supabase = await createClient();
+  const week = Number(params.week) || (await getDefaultWeek(supabase, season));
 
   const { data: weekRow } = await supabase
     .from("weeks")
