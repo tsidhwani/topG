@@ -56,6 +56,12 @@ export default async function AppLayout({
               >
                 Settlement
               </Link>
+              <Link
+                href="/admin/settings"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Settings
+              </Link>
             </>
           )}
         </nav>
