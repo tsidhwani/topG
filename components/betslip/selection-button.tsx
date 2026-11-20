@@ -19,7 +19,7 @@ export function SelectionButton({ selection }: { selection: SlipSelection }) {
       className={cn(
         "flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors",
         selected
-          ? "border-primary bg-primary/10"
+          ? "border-primary bg-primary/15"
           : "border-border hover:bg-muted",
       )}
     >
@@ -27,7 +27,7 @@ export function SelectionButton({ selection }: { selection: SlipSelection }) {
         {selection.label}
         {selection.line != null ? ` (${selection.line})` : ""}
       </span>
-      <span className="font-medium tabular-nums">
+      <span className="font-heading text-lg leading-none tracking-wide text-primary tabular-nums">
         {formatOdds(selection.americanOdds)}
       </span>
     </button>

@@ -29,10 +29,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6">
+      <div className="flex items-baseline gap-2">
+        <span className="font-heading text-5xl leading-none text-primary [text-shadow:0_0_24px_var(--primary)]">
+          TOPG
+        </span>
+        <span className="text-sm font-medium tracking-[0.25em] text-muted-foreground uppercase">
+          Sportsbook
+        </span>
+      </div>
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Top G Sportsbook</CardTitle>
+          <CardTitle>Sign in</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">

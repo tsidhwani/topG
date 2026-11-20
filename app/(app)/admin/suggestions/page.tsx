@@ -103,7 +103,7 @@ export default async function AdminSuggestionsPage({
                 <span>
                   {s.payload.home_team_name} (proj {s.payload.home_projected.toFixed(1)})
                 </span>
-                <span className="font-medium tabular-nums">
+                <span className="font-heading text-lg leading-none text-primary tabular-nums">
                   {formatOdds(s.payload.home_odds)}
                 </span>
               </div>
@@ -111,7 +111,7 @@ export default async function AdminSuggestionsPage({
                 <span>
                   {s.payload.away_team_name} (proj {s.payload.away_projected.toFixed(1)})
                 </span>
-                <span className="font-medium tabular-nums">
+                <span className="font-heading text-lg leading-none text-primary tabular-nums">
                   {formatOdds(s.payload.away_odds)}
                 </span>
               </div>

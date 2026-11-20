@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { SignOutButton } from "@/components/sign-out-button";
+import { NavLink } from "@/components/nav-link";
 
 export default async function AppLayout({
   children,
@@ -19,60 +20,37 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <nav className="flex items-center gap-4">
-          <Link href="/" className="font-semibold">
-            Top G Sportsbook
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-primary/30 bg-background/95 px-4 py-2.5 shadow-[0_1px_20px_-4px_var(--primary)] backdrop-blur">
+        <div className="flex items-center gap-4 overflow-x-auto">
+          <Link href="/" className="flex shrink-0 items-baseline gap-1.5">
+            <span className="font-heading text-2xl leading-none text-primary [text-shadow:0_0_14px_var(--primary)]">
+              TOPG
+            </span>
+            <span className="hidden text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase sm:inline">
+              Sportsbook
+            </span>
           </Link>
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:text-foreground"
+          <nav className="flex items-center gap-1">
+            <NavLink href="/">This Week</NavLink>
+            <NavLink href="/my-bets">My Bets</NavLink>
+            {profile.role === "admin" && (
+              <>
+                <NavLink href="/admin/lines">Lines</NavLink>
+                <NavLink href="/admin/suggestions">Suggestions</NavLink>
+                <NavLink href="/admin/grading">Grading</NavLink>
+                <NavLink href="/admin/settlement">Settlement</NavLink>
+                <NavLink href="/admin/settings">Settings</NavLink>
+              </>
+            )}
+          </nav>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <Badge
+            variant={profile.role === "admin" ? "default" : "secondary"}
+            className="uppercase"
           >
-            This Week
-          </Link>
-          <Link
-            href="/my-bets"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            My Bets
-          </Link>
-          {profile.role === "admin" && (
-            <>
-              <Link
-                href="/admin/lines"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Lines
-              </Link>
-              <Link
-                href="/admin/suggestions"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Suggestions
-              </Link>
-              <Link
-                href="/admin/grading"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Grading
-              </Link>
-              <Link
-                href="/admin/settlement"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Settlement
-              </Link>
-              <Link
-                href="/admin/settings"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Settings
-              </Link>
-            </>
-          )}
-        </nav>
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary">{profile.role}</Badge>
+            {profile.role}
+          </Badge>
           <SignOutButton />
         </div>
       </header>
