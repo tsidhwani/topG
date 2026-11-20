@@ -19,7 +19,9 @@ export function SyncNowButton() {
         const summary = await syncEspnNow();
         setMessage(
           `Synced ${summary.teams} teams, ${summary.matchups} matchups, ` +
-            `${summary.playerWeeksSynced} player-weeks (weeks ${summary.weeksSynced.join(", ")}).`,
+            `${summary.playerWeeksSynced} player-weeks (weeks ${summary.weeksSynced.join(", ")}). ` +
+            `Auto-graded ${summary.marketsAutoGraded} market${summary.marketsAutoGraded === 1 ? "" : "s"}, ` +
+            `regraded ${summary.betsRegraded} bet${summary.betsRegraded === 1 ? "" : "s"}.`,
         );
         router.refresh();
       } catch (err) {

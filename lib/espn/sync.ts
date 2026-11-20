@@ -5,6 +5,7 @@ import {
   getTeams,
   getWeekBoxscore,
 } from "./client";
+import { autoGradeMoneylines } from "./autograde";
 
 function season(): number {
   return Number(process.env.ESPN_SEASON);
@@ -107,13 +108,16 @@ export interface SyncSummary {
   currentWeek: number;
   weeksSynced: number[];
   playerWeeksSynced: number;
+  marketsAutoGraded: number;
+  betsRegraded: number;
   syncedAt: string;
 }
 
 // Syncs teams, the full season's matchup scores, and player boxscores for
 // the current week plus the previous one (covers "upcoming week projections"
 // and "just-finished week actuals" without re-fetching every past week on
-// every run).
+// every run), then auto-grades any suggestion-engine moneyline markets
+// whose matchup just went final.
 export async function syncAll(supabase: SupabaseClient): Promise<SyncSummary> {
   const status = await getLeagueStatus();
   const teams = await syncTeams(supabase);
@@ -129,12 +133,19 @@ export async function syncAll(supabase: SupabaseClient): Promise<SyncSummary> {
     playerWeeksSynced += await syncWeekBoxscore(supabase, week);
   }
 
+  const { marketsGraded, betsRegraded } = await autoGradeMoneylines(
+    supabase,
+    Number(process.env.ESPN_SEASON),
+  );
+
   return {
     teams,
     matchups,
     currentWeek: status.currentMatchupPeriod,
     weeksSynced: weeksToSync,
     playerWeeksSynced,
+    marketsAutoGraded: marketsGraded,
+    betsRegraded,
     syncedAt: new Date().toISOString(),
   };
 }
