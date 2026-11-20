@@ -23,3 +23,12 @@ export async function placeBet(
 
   return data as string;
 }
+
+export async function cancelBet(betId: string): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("cancel_bet", { p_bet_id: betId });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/my-bets");
+}

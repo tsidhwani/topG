@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CancelBetButton } from "@/components/bets/cancel-bet-button";
 
 interface BetLeg {
   id: string;
@@ -10,7 +11,7 @@ interface BetLeg {
   selections: {
     label: string;
     line: number | null;
-    markets: { title: string } | null;
+    markets: { title: string; status: string; lock_at: string | null } | null;
   } | null;
 }
 
@@ -46,6 +47,15 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
+function canStillCancel(bet: Bet): boolean {
+  if (bet.status !== "open") return false;
+  return bet.bet_legs.every((leg) => {
+    const market = leg.selections?.markets;
+    if (!market || market.status !== "open") return false;
+    return !market.lock_at || new Date(market.lock_at) > new Date();
+  });
+}
+
 function BetCard({ bet }: { bet: Bet }) {
   const net = bet.potential_payout_cents - bet.stake_cents;
   const isSettled = bet.status !== "open";
@@ -77,6 +87,7 @@ function BetCard({ bet }: { bet: Bet }) {
             </span>
           )}
         </p>
+        {canStillCancel(bet) && <CancelBetButton betId={bet.id} />}
       </CardContent>
     </Card>
   );
@@ -95,7 +106,7 @@ export default async function MyBetsPage() {
   const { data: betsData } = await supabase
     .from("bets")
     .select(
-      "id, type, stake_cents, potential_payout_cents, status, placed_at, bet_legs(id, odds_at_placement, selections(label, line, markets(title)))",
+      "id, type, stake_cents, potential_payout_cents, status, placed_at, bet_legs(id, odds_at_placement, selections(label, line, markets(title, status, lock_at)))",
     )
     .eq("user_id", user.id)
     .order("placed_at", { ascending: false });
