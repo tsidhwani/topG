@@ -1,0 +1,152 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface BetLeg {
+  id: string;
+  odds_at_placement: number;
+  selections: {
+    label: string;
+    line: number | null;
+    markets: { title: string } | null;
+  } | null;
+}
+
+interface Bet {
+  id: string;
+  type: string;
+  stake_cents: number;
+  potential_payout_cents: number;
+  status: string;
+  placed_at: string;
+  bet_legs: BetLeg[];
+}
+
+function centsToDollars(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function legSummary(leg: BetLeg): string {
+  const label = leg.selections?.label ?? "Unknown selection";
+  const line = leg.selections?.line;
+  const market = leg.selections?.markets?.title;
+  const odds =
+    leg.odds_at_placement > 0
+      ? `+${leg.odds_at_placement}`
+      : `${leg.odds_at_placement}`;
+  return `${market ? `${market}: ` : ""}${label}${line != null ? ` (${line})` : ""} (${odds})`;
+}
+
+function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "won") return "default";
+  if (status === "lost") return "destructive";
+  if (status === "open") return "secondary";
+  return "outline";
+}
+
+function BetCard({ bet }: { bet: Bet }) {
+  const net = bet.potential_payout_cents - bet.stake_cents;
+  const isSettled = bet.status !== "open";
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base capitalize">
+          {bet.type} &mdash; ${centsToDollars(bet.stake_cents)}
+        </CardTitle>
+        <Badge variant={statusVariant(bet.status)}>{bet.status}</Badge>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+          {bet.bet_legs.map((leg) => (
+            <li key={leg.id}>{legSummary(leg)}</li>
+          ))}
+        </ul>
+        <p className="text-sm">
+          {isSettled ? "Payout" : "Potential payout"}: $
+          {centsToDollars(bet.potential_payout_cents)}
+          {isSettled && (
+            <span
+              className={net >= 0 ? "text-green-600" : "text-destructive"}
+            >
+              {" "}
+              ({net >= 0 ? "+" : ""}
+              {centsToDollars(net)})
+            </span>
+          )}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default async function MyBetsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: betsData } = await supabase
+    .from("bets")
+    .select(
+      "id, type, stake_cents, potential_payout_cents, status, placed_at, bet_legs(id, odds_at_placement, selections(label, line, markets(title)))",
+    )
+    .eq("user_id", user.id)
+    .order("placed_at", { ascending: false });
+
+  const bets = (betsData ?? []) as unknown as Bet[];
+  const active = bets.filter((b) => b.status === "open");
+  const history = bets.filter((b) => b.status !== "open");
+  const seasonNetCents = history.reduce(
+    (sum, b) => sum + (b.potential_payout_cents - b.stake_cents),
+    0,
+  );
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">My Bets</h1>
+        <p className="text-sm">
+          Season P/L:{" "}
+          <span
+            className={
+              seasonNetCents >= 0 ? "text-green-600" : "text-destructive"
+            }
+          >
+            {seasonNetCents >= 0 ? "+" : ""}
+            {centsToDollars(seasonNetCents)}
+          </span>
+        </p>
+      </div>
+
+      <Tabs defaultValue="active">
+        <TabsList>
+          <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
+          <TabsTrigger value="history">History ({history.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active" className="flex flex-col gap-3 pt-3">
+          {active.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active bets.</p>
+          ) : (
+            active.map((bet) => <BetCard key={bet.id} bet={bet} />)
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="flex flex-col gap-3 pt-3">
+          {history.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No settled bets yet.</p>
+          ) : (
+            history.map((bet) => <BetCard key={bet.id} bet={bet} />)
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
