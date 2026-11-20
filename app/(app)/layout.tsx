@@ -37,12 +37,26 @@ export default async function AppLayout({
             My Bets
           </Link>
           {profile.role === "admin" && (
-            <Link
-              href="/admin/lines"
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/admin/lines"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Lines
+              </Link>
+              <Link
+                href="/admin/grading"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Grading
+              </Link>
+              <Link
+                href="/admin/settlement"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Settlement
+              </Link>
+            </>
           )}
         </nav>
         <div className="flex items-center gap-3">

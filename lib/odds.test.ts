@@ -52,7 +52,7 @@ describe("parlayDecimalOdds / parlayPayoutCents", () => {
 describe("gradeBet", () => {
   it("wins a single bet with a winning leg", () => {
     const result = gradeBet([{ odds: -150, result: "win" }], 500);
-    expect(result).toEqual({ status: "win", payoutCents: 833 });
+    expect(result).toEqual({ status: "won", payoutCents: 833 });
   });
 
   it("pushes a single bet with a pushed leg (stake returned)", () => {
@@ -68,7 +68,7 @@ describe("gradeBet", () => {
       ],
       500,
     );
-    expect(result).toEqual({ status: "loss", payoutCents: 0 });
+    expect(result).toEqual({ status: "lost", payoutCents: 0 });
   });
 
   it("is pending while any leg is still pending", () => {
@@ -91,7 +91,7 @@ describe("gradeBet", () => {
       ],
       500,
     );
-    expect(result).toEqual({ status: "win", payoutCents: 833 });
+    expect(result).toEqual({ status: "won", payoutCents: 833 });
   });
 
   it("drops a voided leg the same way it drops a pushed one", () => {
@@ -102,7 +102,7 @@ describe("gradeBet", () => {
       ],
       500,
     );
-    expect(result).toEqual({ status: "win", payoutCents: 833 });
+    expect(result).toEqual({ status: "won", payoutCents: 833 });
   });
 
   it("pushes the whole parlay when every leg pushes or voids", () => {

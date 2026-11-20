@@ -10,8 +10,12 @@ export interface ParlayLeg {
   result: LegResult;
 }
 
+// Note this is deliberately "won"/"lost", not "win"/"loss" — it matches
+// bets.status (docs/07-data-model.md), which uses different words than
+// selections.result/LegResult above. Mixing them up fails the DB's
+// bets_status_check constraint.
 export interface GradedBetResult {
-  status: "pending" | "win" | "loss" | "push" | "void";
+  status: "pending" | "won" | "lost" | "push" | "void";
   payoutCents: number;
 }
 
@@ -55,7 +59,7 @@ export function gradeBet(legs: ParlayLeg[], stakeCents: number): GradedBetResult
   }
 
   if (legs.some((leg) => leg.result === "loss")) {
-    return { status: "loss", payoutCents: 0 };
+    return { status: "lost", payoutCents: 0 };
   }
 
   if (legs.some((leg) => leg.result === "pending")) {
@@ -71,7 +75,7 @@ export function gradeBet(legs: ParlayLeg[], stakeCents: number): GradedBetResult
   }
 
   return {
-    status: "win",
+    status: "won",
     payoutCents: parlayPayoutCents(
       liveLegs.map((leg) => leg.odds),
       stakeCents,
