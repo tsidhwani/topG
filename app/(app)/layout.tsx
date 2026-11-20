@@ -45,6 +45,12 @@ export default async function AppLayout({
                 Lines
               </Link>
               <Link
+                href="/admin/suggestions"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Suggestions
+              </Link>
+              <Link
                 href="/admin/grading"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
