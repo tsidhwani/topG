@@ -35,8 +35,9 @@ export default async function AppLayout({
             <NavLink href="/my-bets">My Bets</NavLink>
             {profile.role === "admin" && (
               <>
-                <NavLink href="/admin/lines">Lines</NavLink>
-                <NavLink href="/admin/suggestions">Suggestions</NavLink>
+                <NavLink href="/admin/lines-studio">Lines Studio</NavLink>
+                <NavLink href="/admin/lines">Lines (old)</NavLink>
+                <NavLink href="/admin/suggestions">Suggestions (old)</NavLink>
                 <NavLink href="/admin/grading">Grading</NavLink>
                 <NavLink href="/admin/settlement">Settlement</NavLink>
                 <NavLink href="/admin/settings">Settings</NavLink>
