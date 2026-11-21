@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDefaultWeek } from "@/lib/weeks";
 import { acceptSuggestion, dismissSuggestion } from "@/lib/actions/suggestions";
 import { GenerateSuggestionsButton } from "@/components/admin/generate-suggestions-button";
+import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,14 +49,7 @@ export default async function AdminSuggestionsPage({
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Suggestions</h1>
-      <p className="text-sm text-muted-foreground">
-        Suggested moneylines from ESPN&apos;s projections, via a Monte Carlo
-        simulation — not an LLM. Math only, so the numbers are explainable:
-        each team&apos;s score is simulated as a normal distribution around
-        its ESPN projection, and the win fraction becomes the odds, with a
-        small built-in house edge.
-      </p>
+      <PageHeading title="Suggestions" tagline="Tight Margins" />
 
       <form className="flex items-end gap-3">
         <div className="flex flex-col gap-1">

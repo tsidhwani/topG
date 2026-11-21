@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDefaultWeek } from "@/lib/weeks";
 import { upsertWeek, publishWeek } from "@/lib/actions/admin-lines";
 import { MarketForm } from "@/components/admin/market-form";
+import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +46,7 @@ export default async function AdminLinesPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Lines Builder</h1>
+      <PageHeading title="Lines Builder" />
 
       <form className="flex items-end gap-3">
         <div className="flex flex-col gap-1">

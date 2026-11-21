@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { BetSlipProvider } from "@/components/betslip/bet-slip-context";
 import { SelectionButton } from "@/components/betslip/selection-button";
 import { BetSlipDrawer } from "@/components/betslip/bet-slip-drawer";
+import { LockCountdown } from "@/components/lock-countdown";
+import { PageHeading } from "@/components/page-heading";
 
 interface Selection {
   id: string;
@@ -34,12 +36,15 @@ function groupMarkets(markets: Market[]) {
 
 function MarketCard({ market }: { market: Market }) {
   return (
-    <Card>
+    <Card className="transition-shadow hover:shadow-[0_0_32px_-8px_var(--primary)]">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">{market.title}</CardTitle>
-        <Badge variant={market.status === "open" ? "default" : "secondary"}>
-          {market.status}
-        </Badge>
+        <div className="flex flex-col items-end gap-1">
+          <Badge variant={market.status === "open" ? "default" : "secondary"}>
+            {market.status}
+          </Badge>
+          {market.lock_at && <LockCountdown lockAt={market.lock_at} />}
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {market.description && (
@@ -76,10 +81,15 @@ export default async function ThisWeekPage() {
 
   if (!weekRow) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 p-6 text-center">
-        <h1 className="text-xl font-semibold">No lines published yet</h1>
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 p-6 pt-24 text-center">
+        <h1 className="font-heading text-3xl text-primary">
+          No lines published yet
+        </h1>
         <p className="text-sm text-muted-foreground">
           Check back once the admins publish this week&apos;s board.
+        </p>
+        <p className="mt-4 text-xs tracking-[0.2em] text-muted-foreground/70 uppercase">
+          Good Lines, Better People
         </p>
       </div>
     );
@@ -101,14 +111,15 @@ export default async function ThisWeekPage() {
   return (
     <BetSlipProvider>
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6 pb-24">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">
-            Season {weekRow.season}, Week {weekRow.week}
-          </h1>
-          <Badge variant={weekRow.status === "open" ? "default" : "secondary"}>
-            {weekRow.status}
-          </Badge>
-        </div>
+        <PageHeading
+          title={`Week ${weekRow.week}`}
+          tagline={`Season ${weekRow.season}`}
+          action={
+            <Badge variant={weekRow.status === "open" ? "default" : "secondary"}>
+              {weekRow.status}
+            </Badge>
+          }
+        />
 
         {markets.length === 0 && (
           <p className="text-sm text-muted-foreground">

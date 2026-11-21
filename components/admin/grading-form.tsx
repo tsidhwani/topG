@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { saveGrades } from "@/lib/actions/grading";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,21 +44,17 @@ export function GradingForm({
     }
     return initial;
   });
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       try {
         await saveGrades(season, week, results);
-        setMessage("Results saved and affected bets regraded.");
+        toast.success("Results saved and affected bets regraded.");
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
       }
     });
   }
@@ -99,9 +96,6 @@ export function GradingForm({
           </CardContent>
         </Card>
       ))}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {message && <p className="text-sm text-muted-foreground">{message}</p>}
 
       <Button type="submit" disabled={isPending}>
         {isPending ? "Saving..." : "Save results"}

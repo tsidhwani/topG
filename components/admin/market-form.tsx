@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { createMarket } from "@/lib/actions/admin-lines";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,6 @@ export function MarketForm({ season, week }: { season: number; week: number }) {
     { ...emptyRow },
     { ...emptyRow },
   ]);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function updateRow(index: number, patch: Partial<SelectionRow>) {
@@ -51,7 +51,6 @@ export function MarketForm({ season, week }: { season: number; week: number }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     startTransition(async () => {
       try {
         await createMarket({
@@ -67,13 +66,14 @@ export function MarketForm({ season, week }: { season: number; week: number }) {
             line: r.line ? Number(r.line) : null,
           })),
         });
+        toast.success(`"${title}" saved as a draft.`);
         setTitle("");
         setDescription("");
         setLockAt("");
         setRows([{ ...emptyRow }, { ...emptyRow }]);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
       }
     });
   }
@@ -174,8 +174,6 @@ export function MarketForm({ season, week }: { season: number; week: number }) {
               + Add selection
             </Button>
           </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Saving..." : "Save as draft"}

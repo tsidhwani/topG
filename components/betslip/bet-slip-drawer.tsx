@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { X } from "lucide-react";
 import { useBetSlip } from "./bet-slip-context";
 import { placeBet } from "@/lib/actions/bets";
 import { payoutCents, parlayPayoutCents } from "@/lib/odds";
@@ -33,15 +35,11 @@ export function BetSlipDrawer() {
   const [open, setOpen] = useState(false);
   const [singleStakes, setSingleStakes] = useState<Record<string, string>>({});
   const [parlayStake, setParlayStake] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   if (selections.length === 0) return null;
 
   function handlePlaceSingles() {
-    setError(null);
-    setMessage(null);
     startTransition(async () => {
       try {
         let placed = 0;
@@ -52,25 +50,24 @@ export function BetSlipDrawer() {
           placed += 1;
         }
         if (placed === 0) {
-          setError("Enter a stake on at least one selection.");
+          toast.error("Enter a stake on at least one selection.");
           return;
         }
-        setMessage(`Placed ${placed} bet${placed === 1 ? "" : "s"}.`);
+        toast.success(`Placed ${placed} bet${placed === 1 ? "" : "s"}.`);
         setSingleStakes({});
         clear();
+        setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
       }
     });
   }
 
   function handlePlaceParlay() {
-    setError(null);
-    setMessage(null);
     const stakeCents = dollarsToCents(parlayStake);
     if (stakeCents <= 0) {
-      setError("Enter a stake.");
+      toast.error("Enter a stake.");
       return;
     }
     startTransition(async () => {
@@ -80,12 +77,13 @@ export function BetSlipDrawer() {
           stakeCents,
           selections.map((s) => s.id),
         );
-        setMessage("Parlay placed.");
+        toast.success("Parlay placed.");
         setParlayStake("");
         clear();
+        setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
       }
     });
   }
@@ -97,21 +95,23 @@ export function BetSlipDrawer() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 shadow-lg" />
+          <Button className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 shadow-[0_0_24px_-4px_var(--primary)] transition-transform hover:scale-105 active:scale-95" />
         }
       >
         Bet slip ({selections.length})
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Bet slip</SheetTitle>
+          <SheetTitle className="font-heading text-xl text-primary">
+            Bet Slip
+          </SheetTitle>
         </SheetHeader>
 
         <div className="flex flex-col gap-2 overflow-y-auto px-4">
           {selections.map((s) => (
             <div
               key={s.id}
-              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors"
             >
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground">
@@ -126,10 +126,11 @@ export function BetSlipDrawer() {
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 onClick={() => removeSelection(s.id)}
+                aria-label={`Remove ${s.label}`}
               >
-                Remove
+                <X className="size-3.5" />
               </Button>
             </div>
           ))}
@@ -164,7 +165,7 @@ export function BetSlipDrawer() {
                       }))
                     }
                   />
-                  <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+                  <span className="w-20 shrink-0 text-right text-xs font-medium text-primary">
                     {stakeCents > 0
                       ? `$${centsToDollars(payoutCents(s.americanOdds, stakeCents))}`
                       : ""}
@@ -195,7 +196,7 @@ export function BetSlipDrawer() {
                 value={parlayStake}
                 onChange={(e) => setParlayStake(e.target.value)}
               />
-              <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
+              <span className="w-24 shrink-0 text-right text-xs font-medium text-primary">
                 {parlayStakeCents > 0
                   ? `$${centsToDollars(parlayPayoutCents(parlayOdds, parlayStakeCents))}`
                   : ""}
@@ -207,13 +208,11 @@ export function BetSlipDrawer() {
           </TabsContent>
         </Tabs>
 
-        {error && <p className="px-4 text-sm text-destructive">{error}</p>}
-        {message && (
-          <p className="px-4 text-sm text-muted-foreground">{message}</p>
-        )}
-
-        <SheetFooter>
-          <Button type="button" variant="outline" onClick={clear}>
+        <SheetFooter className="flex-row items-center justify-between">
+          <span className="text-[0.65rem] tracking-[0.2em] text-muted-foreground/70 uppercase">
+            Tight Margins
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={clear}>
             Clear slip
           </Button>
         </SheetFooter>

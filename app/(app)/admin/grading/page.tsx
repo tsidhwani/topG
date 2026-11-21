@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDefaultWeek } from "@/lib/weeks";
 import { confirmWeekGraded } from "@/lib/actions/grading";
 import { GradingForm } from "@/components/admin/grading-form";
+import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +58,7 @@ export default async function AdminGradingPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Grading</h1>
+      <PageHeading title="Grading" />
 
       <form className="flex items-end gap-3">
         <div className="flex flex-col gap-1">

@@ -54,7 +54,12 @@ export default async function AppLayout({
           <SignOutButton />
         </div>
       </header>
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex flex-1 animate-in flex-col fade-in duration-300">
+        {children}
+      </main>
+      <footer className="border-t border-border px-4 py-3 text-center text-[0.65rem] tracking-[0.25em] text-muted-foreground/60 uppercase">
+        Good Lines, Better People
+      </footer>
     </div>
   );
 }

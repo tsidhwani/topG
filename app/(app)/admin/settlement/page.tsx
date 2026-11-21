@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDefaultWeek } from "@/lib/weeks";
 import { markUserWeekSettled } from "@/lib/actions/settlement";
+import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +85,7 @@ export default async function SettlementPage({
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Settlement</h1>
+      <PageHeading title="Settlement" tagline="Good Lines, Better People" />
 
       <form className="flex items-end gap-3">
         <div className="flex flex-col gap-1">

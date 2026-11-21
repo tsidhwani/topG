@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SyncNowButton } from "@/components/admin/sync-now-button";
+import { PageHeading } from "@/components/page-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -19,7 +20,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Admin Settings</h1>
+      <PageHeading title="Admin Settings" />
 
       <Card>
         <CardHeader>
