@@ -30,6 +30,14 @@ describe("simulateMoneyline", () => {
     expect(result.homeOdds).not.toBe(result.homeFairOdds);
     expect(result.awayOdds).not.toBe(result.awayFairOdds);
   });
+
+  it("stays stable across repeated runs (no RNG seed, so this is the real check)", () => {
+    const runs = Array.from({ length: 5 }, () => simulateMoneyline(130, 115, 22));
+    for (const run of runs) {
+      expect(run.homeWinProbability).toBeGreaterThan(0.5);
+      expect(run.homeWinProbability).toBeLessThan(0.85);
+    }
+  });
 });
 
 function tenTeams(projections: number[]) {
@@ -79,5 +87,15 @@ describe("simulateTeamExtremes", () => {
 
   it("rejects fewer than two teams", () => {
     expect(() => simulateTeamExtremes([{ teamId: 1, projected: 100 }])).toThrow();
+  });
+
+  it("stays stable across repeated runs (no RNG seed, so this is the real check)", () => {
+    const teams = tenTeams([130, 125, 120, 115, 110, 108, 105, 100, 95, 90]);
+    const runs = Array.from({ length: 5 }, () => simulateTeamExtremes(teams, 22, 0));
+    for (const run of runs) {
+      const sum = run.highest.reduce((s, r) => s + r.probability, 0);
+      expect(sum).toBeGreaterThan(0.9);
+      expect(sum).toBeLessThan(1.1);
+    }
   });
 });

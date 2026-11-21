@@ -1,5 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { regradeAffectedBets } from "@/lib/bets/regrade";
+import { compareTwoWay, gradeExtreme } from "./grading-logic";
+
+export interface AutoGradeSummary {
+  marketsGraded: number;
+  betsRegraded: number;
+}
+
+function mergeSummaries(a: AutoGradeSummary, b: AutoGradeSummary): AutoGradeSummary {
+  return {
+    marketsGraded: a.marketsGraded + b.marketsGraded,
+    betsRegraded: a.betsRegraded + b.betsRegraded,
+  };
+}
 
 interface MoneylineLinkedIds {
   type?: string;
@@ -14,11 +27,6 @@ interface MoneylineMarket {
   week: number;
   linked_ids: MoneylineLinkedIds | null;
   selections: { id: string; label: string }[];
-}
-
-export interface AutoGradeSummary {
-  marketsGraded: number;
-  betsRegraded: number;
 }
 
 // Grades moneyline markets created via the suggestion engine (the only
@@ -72,37 +80,19 @@ export async function autoGradeMoneylines(
     const awaySelection = market.selections.find((s) => s.label === linked.away_label);
     if (!homeSelection || !awaySelection) continue;
 
-    let homeResult: string;
-    let awayResult: string;
-    if (matchup.home_score > matchup.away_score) {
-      homeResult = "win";
-      awayResult = "loss";
-    } else if (matchup.away_score > matchup.home_score) {
-      homeResult = "loss";
-      awayResult = "win";
-    } else {
-      homeResult = "push";
-      awayResult = "push";
-    }
+    const { a: homeResult, b: awayResult } = compareTwoWay(
+      matchup.home_score,
+      matchup.away_score,
+    );
 
-    const { error: homeUpdateError } = await supabase
-      .from("selections")
-      .update({ result: homeResult })
-      .eq("id", homeSelection.id);
-    if (homeUpdateError) throw new Error(homeUpdateError.message);
-
-    const { error: awayUpdateError } = await supabase
-      .from("selections")
-      .update({ result: awayResult })
-      .eq("id", awaySelection.id);
-    if (awayUpdateError) throw new Error(awayUpdateError.message);
+    await updateSelectionResult(supabase, homeSelection.id, homeResult);
+    await updateSelectionResult(supabase, awaySelection.id, awayResult);
 
     changedSelectionIds.push(homeSelection.id, awaySelection.id);
     marketsGraded++;
   }
 
   const betsRegraded = await regradeAffectedBets(supabase, changedSelectionIds);
-
   return { marketsGraded, betsRegraded };
 }
 
@@ -121,10 +111,7 @@ interface TeamExtremesMarket {
 
 // Grades "highest/lowest scoring team" markets. Needs every matchup for
 // the week to be final (not just one), since the extreme is across all
-// ten teams, not a single matchup -- skips the market otherwise. An exact
-// tie for the max (or min) voids every selection, which gradeBet() already
-// turns into a full refund (no new grading math needed, see docs/08's
-// push/void handling and the existing unit tests).
+// ten teams, not a single matchup -- skips the market otherwise.
 export async function autoGradeTeamExtremes(
   supabase: SupabaseClient,
   season: number,
@@ -158,31 +145,15 @@ export async function autoGradeTeamExtremes(
     const scoresByTeam = weekFinalityCache.get(market.week);
     if (!scoresByTeam) continue; // week not fully final yet
 
-    const extreme =
-      linked.kind === "highest"
-        ? Math.max(...scoresByTeam.values())
-        : Math.min(...scoresByTeam.values());
-    const winningTeamIds = linked.teams
-      .filter((t) => scoresByTeam.get(t.team_id) === extreme)
-      .map((t) => t.team_id);
-    const tied = winningTeamIds.length > 1;
+    const teamIds = linked.teams.map((t) => t.team_id);
+    const resultByTeamId = gradeExtreme(scoresByTeam, teamIds, linked.kind);
 
     for (const team of linked.teams) {
       const selection = market.selections.find((s) => s.label === team.label);
-      if (!selection) continue;
+      const result = resultByTeamId.get(team.team_id);
+      if (!selection || !result || result === "pending") continue;
 
-      const result = tied
-        ? "void"
-        : winningTeamIds[0] === team.team_id
-          ? "win"
-          : "loss";
-
-      const { error } = await supabase
-        .from("selections")
-        .update({ result })
-        .eq("id", selection.id);
-      if (error) throw new Error(error.message);
-
+      await updateSelectionResult(supabase, selection.id, result);
       changedSelectionIds.push(selection.id);
     }
 
@@ -190,7 +161,6 @@ export async function autoGradeTeamExtremes(
   }
 
   const betsRegraded = await regradeAffectedBets(supabase, changedSelectionIds);
-
   return { marketsGraded, betsRegraded };
 }
 
@@ -214,4 +184,125 @@ async function buildFinalScoresByTeam(
     scores.set(m.away_team_id, m.away_score);
   }
   return scores;
+}
+
+interface PlayerPropLinkedIds {
+  type?: string;
+  player_a_id?: number;
+  player_b_id?: number;
+  a_label?: string;
+  b_label?: string;
+  player_ids?: number[];
+}
+
+interface PlayerPropMarket {
+  id: string;
+  week: number;
+  linked_ids: PlayerPropLinkedIds | null;
+  selections: { id: string; label: string; line: number | null }[];
+}
+
+// Grades player-vs-player, combo over/under, and single-player over/under
+// markets once every player involved has a final actual score for the
+// week. A player who didn't play (bye/inactive) still grades once ESPN
+// marks the week final -- their actual_points lands at whatever ESPN
+// recorded (typically 0), matching docs/08's "default: grade as scored."
+export async function autoGradePlayerProps(
+  supabase: SupabaseClient,
+  season: number,
+): Promise<AutoGradeSummary> {
+  const { data: marketsData, error: marketsError } = await supabase
+    .from("markets")
+    .select("id, week, linked_ids, selections(id, label, line)")
+    .eq("season", season)
+    .eq("type", "player_prop")
+    .in("status", ["open", "locked"])
+    .not("linked_ids", "is", null);
+  if (marketsError) throw new Error(`autoGradePlayerProps markets: ${marketsError.message}`);
+
+  const markets = (marketsData ?? []) as unknown as PlayerPropMarket[];
+  const changedSelectionIds: string[] = [];
+  let marketsGraded = 0;
+
+  for (const market of markets) {
+    const linked = market.linked_ids;
+    if (!linked?.type) continue;
+
+    if (linked.type === "player_prop_h2h") {
+      if (linked.player_a_id == null || linked.player_b_id == null) continue;
+
+      const pointsA = await getActualPoints(supabase, season, market.week, linked.player_a_id);
+      const pointsB = await getActualPoints(supabase, season, market.week, linked.player_b_id);
+      if (pointsA == null || pointsB == null) continue; // not final yet
+
+      const aSelection = market.selections.find((s) => s.label === linked.a_label);
+      const bSelection = market.selections.find((s) => s.label === linked.b_label);
+      if (!aSelection || !bSelection) continue;
+
+      const { a: resultA, b: resultB } = compareTwoWay(pointsA, pointsB);
+      await updateSelectionResult(supabase, aSelection.id, resultA);
+      await updateSelectionResult(supabase, bSelection.id, resultB);
+      changedSelectionIds.push(aSelection.id, bSelection.id);
+      marketsGraded++;
+      continue;
+    }
+
+    if (linked.type === "player_prop_combo" || linked.type === "player_prop_single") {
+      if (!linked.player_ids || linked.player_ids.length === 0) continue;
+
+      const pointsList = await Promise.all(
+        linked.player_ids.map((id) => getActualPoints(supabase, season, market.week, id)),
+      );
+      if (pointsList.some((p) => p == null)) continue; // not every player final yet
+      const total = pointsList.reduce((sum: number, p) => sum + (p ?? 0), 0);
+
+      const over = market.selections.find((s) => s.label.startsWith("Over"));
+      const under = market.selections.find((s) => s.label.startsWith("Under"));
+      if (!over || !under || over.line == null) continue;
+
+      const { a: overResult, b: underResult } = compareTwoWay(total, over.line);
+      await updateSelectionResult(supabase, over.id, overResult);
+      await updateSelectionResult(supabase, under.id, underResult);
+      changedSelectionIds.push(over.id, under.id);
+      marketsGraded++;
+    }
+  }
+
+  const betsRegraded = await regradeAffectedBets(supabase, changedSelectionIds);
+  return { marketsGraded, betsRegraded };
+}
+
+async function getActualPoints(
+  supabase: SupabaseClient,
+  season: number,
+  week: number,
+  playerId: number,
+): Promise<number | null> {
+  const { data } = await supabase
+    .from("espn_player_weeks")
+    .select("actual_points")
+    .eq("season", season)
+    .eq("week", week)
+    .eq("player_id", playerId)
+    .maybeSingle();
+  return data?.actual_points ?? null;
+}
+
+async function updateSelectionResult(
+  supabase: SupabaseClient,
+  selectionId: string,
+  result: string,
+) {
+  const { error } = await supabase.from("selections").update({ result }).eq("id", selectionId);
+  if (error) throw new Error(error.message);
+}
+
+export async function autoGradeAll(
+  supabase: SupabaseClient,
+  season: number,
+): Promise<AutoGradeSummary> {
+  const moneylines = await autoGradeMoneylines(supabase, season);
+  const teamExtremes = await autoGradeTeamExtremes(supabase, season);
+  const playerProps = await autoGradePlayerProps(supabase, season);
+  return mergeSummaries(mergeSummaries(moneylines, teamExtremes), playerProps);
 }
