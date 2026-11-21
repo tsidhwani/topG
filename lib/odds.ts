@@ -26,6 +26,46 @@ export function americanToDecimal(odds: AmericanOdds): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
 }
 
+// The implied win probability behind a price, vig included.
+export function americanOddsToProbability(odds: AmericanOdds): number {
+  return 1 / americanToDecimal(odds);
+}
+
+export function probabilityToAmericanOdds(p: number): AmericanOdds {
+  if (p <= 0 || p >= 1) {
+    throw new Error("probability must be strictly between 0 and 1");
+  }
+  return p >= 0.5
+    ? Math.round((-100 * p) / (1 - p))
+    : Math.round((100 * (1 - p)) / p);
+}
+
+// Shrinks the payout side of a fair price by `vig` (e.g. 0.05 = 5%),
+// making it slightly worse for the bettor than fair.
+export function applyVig(americanOdds: AmericanOdds, vig: number): AmericanOdds {
+  const decimal = americanToDecimal(americanOdds);
+  const viggedDecimal = 1 + (decimal - 1) * (1 - vig);
+  const profit = viggedDecimal - 1;
+  return profit >= 1 ? Math.round(profit * 100) : Math.round(-100 / profit);
+}
+
+// Admin edited one side of a two-way market to `editedOdds`, which was
+// originally priced with `vig` applied via applyVig(). Inverts applyVig's
+// exact formula to recover the fair probability, flips it for the other
+// side, and reapplies the same vig — keeps the market's implied margin
+// constant while the admin free-edits one side. Used by the Lines Studio
+// "linked odds" toggle.
+export function relinkTwoWayOdds(editedOdds: AmericanOdds, vig: number): AmericanOdds {
+  const viggedDecimal = americanToDecimal(editedOdds);
+  const fairDecimal = 1 + (viggedDecimal - 1) / (1 - vig);
+  const fairProbability = 1 / fairDecimal;
+  const otherFairProbability = 1 - fairProbability;
+  if (otherFairProbability <= 0 || otherFairProbability >= 1) {
+    throw new Error("cannot relink odds: implied probability out of range");
+  }
+  return applyVig(probabilityToAmericanOdds(otherFairProbability), vig);
+}
+
 export function profitCents(odds: AmericanOdds, stakeCents: number): number {
   return Math.round(stakeCents * (americanToDecimal(odds) - 1));
 }

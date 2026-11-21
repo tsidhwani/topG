@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  americanOddsToProbability,
   americanToDecimal,
+  applyVig,
   gradeBet,
   parlayDecimalOdds,
   parlayPayoutCents,
   payoutCents,
+  probabilityToAmericanOdds,
   profitCents,
+  relinkTwoWayOdds,
 } from "./odds";
 
 describe("americanToDecimal", () => {
@@ -46,6 +50,76 @@ describe("parlayDecimalOdds / parlayPayoutCents", () => {
 
   it("rejects an empty leg list", () => {
     expect(() => parlayDecimalOdds([])).toThrow();
+  });
+});
+
+describe("americanOddsToProbability", () => {
+  it("round-trips with probabilityToAmericanOdds", () => {
+    expect(americanOddsToProbability(probabilityToAmericanOdds(0.6))).toBeCloseTo(0.6, 2);
+  });
+});
+
+describe("probabilityToAmericanOdds", () => {
+  it("gives negative odds for a favorite (p >= 0.5)", () => {
+    expect(probabilityToAmericanOdds(0.6)).toBe(-150);
+  });
+
+  it("gives positive odds for an underdog (p < 0.5)", () => {
+    expect(probabilityToAmericanOdds(0.4)).toBe(150);
+  });
+
+  it("is symmetric at a coin flip", () => {
+    expect(probabilityToAmericanOdds(0.5)).toBe(-100);
+  });
+
+  it("rejects probabilities outside (0, 1)", () => {
+    expect(() => probabilityToAmericanOdds(0)).toThrow();
+    expect(() => probabilityToAmericanOdds(1)).toThrow();
+  });
+});
+
+describe("applyVig", () => {
+  it("makes a positive-odds underdog's payout worse", () => {
+    expect(applyVig(150, 0.05)).toBe(142);
+  });
+
+  it("makes a negative-odds favorite's payout worse (odds move toward 0)", () => {
+    expect(applyVig(-150, 0.05)).toBe(-158);
+  });
+
+  it("0 vig leaves odds unchanged", () => {
+    expect(applyVig(150, 0)).toBe(150);
+    expect(applyVig(-150, 0)).toBe(-150);
+  });
+});
+
+describe("relinkTwoWayOdds", () => {
+  it("recovers the original other-side odds for a vig-consistent pair", () => {
+    // Fair 60/40 split at 4.5% vig: home -150 -> fair .6, away +150 -> fair .4
+    const homeFair = probabilityToAmericanOdds(0.6);
+    const awayFair = probabilityToAmericanOdds(0.4);
+    const homeVigged = applyVig(homeFair, 0.045);
+    const awayVigged = applyVig(awayFair, 0.045);
+
+    // Editing nothing: relinking the home side should reproduce the away side.
+    expect(relinkTwoWayOdds(homeVigged, 0.045)).toBe(awayVigged);
+  });
+
+  it("recalculates the other side after an edit, keeping the same vig", () => {
+    // Admin edits the home side to a juicier -120 (closer to a coin flip).
+    const recalculatedAway = relinkTwoWayOdds(-120, 0.045);
+    // The implied probabilities (post-vig) of both sides should sum to
+    // slightly over 1 by the overround, not exactly 1 (that's the vig).
+    const impliedSum =
+      americanOddsToProbability(-120) + americanOddsToProbability(recalculatedAway);
+    expect(impliedSum).toBeGreaterThan(1);
+    expect(impliedSum).toBeLessThan(1.15);
+  });
+
+  it("with 0 vig, the other side is exactly the complementary fair price", () => {
+    const home = probabilityToAmericanOdds(0.7);
+    const away = relinkTwoWayOdds(home, 0);
+    expect(away).toBe(probabilityToAmericanOdds(0.3));
   });
 });
 

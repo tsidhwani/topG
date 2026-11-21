@@ -4,9 +4,11 @@
 // win fraction converts directly to American odds. A small vig is then
 // applied so both sides are slightly worse than fair.
 
+import { applyVig, probabilityToAmericanOdds } from "@/lib/odds";
+
 const SIMULATIONS = 10_000;
 export const DEFAULT_STDDEV = 22;
-export const DEFAULT_VIG = 0.05;
+export const DEFAULT_VIG = 0.045;
 
 // Box-Muller transform for a standard normal sample.
 function randomNormal(mean: number, stddev: number): number {
@@ -16,27 +18,10 @@ function randomNormal(mean: number, stddev: number): number {
   return mean + z * stddev;
 }
 
-export function probabilityToAmericanOdds(p: number): number {
-  if (p <= 0 || p >= 1) {
-    throw new Error("probability must be strictly between 0 and 1");
-  }
-  return p >= 0.5
-    ? Math.round((-100 * p) / (1 - p))
-    : Math.round((100 * (1 - p)) / p);
-}
-
-// Shrinks the payout side of the odds by `vig` (e.g. 0.05 = 5%), making
-// both sides of the line slightly worse for the bettor than fair.
-export function applyVig(americanOdds: number, vig: number): number {
-  const decimal =
-    americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds);
-  const viggedDecimal = 1 + (decimal - 1) * (1 - vig);
-  const profit = viggedDecimal - 1;
-  return profit >= 1 ? Math.round(profit * 100) : Math.round(-100 / profit);
-}
-
 export interface MatchupSuggestion {
   homeWinProbability: number;
+  homeFairOdds: number;
+  awayFairOdds: number;
   homeOdds: number;
   awayOdds: number;
 }
@@ -63,9 +48,14 @@ export function simulateMoneyline(
     Math.max(0.005, homeWins / SIMULATIONS),
   );
 
+  const homeFairOdds = probabilityToAmericanOdds(homeWinProbability);
+  const awayFairOdds = probabilityToAmericanOdds(1 - homeWinProbability);
+
   return {
     homeWinProbability,
-    homeOdds: applyVig(probabilityToAmericanOdds(homeWinProbability), vig),
-    awayOdds: applyVig(probabilityToAmericanOdds(1 - homeWinProbability), vig),
+    homeFairOdds,
+    awayFairOdds,
+    homeOdds: applyVig(homeFairOdds, vig),
+    awayOdds: applyVig(awayFairOdds, vig),
   };
 }

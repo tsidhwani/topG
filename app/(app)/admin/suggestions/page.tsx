@@ -1,29 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
-import { acceptSuggestion, dismissSuggestion } from "@/lib/actions/suggestions";
-import { GenerateSuggestionsButton } from "@/components/admin/generate-suggestions-button";
+import { MoneylineStudio } from "@/components/admin/moneyline-studio";
 import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { MoneylinePayload } from "@/lib/actions/suggestions";
+import type { MoneylineDraftRow } from "@/components/admin/moneyline-row";
 
-interface MoneylinePayload {
-  home_team_name: string;
-  away_team_name: string;
-  home_projected: number;
-  away_projected: number;
-  home_odds: number;
-  away_odds: number;
-}
-
-interface Suggestion {
+interface MarketRow {
   id: string;
-  payload: MoneylinePayload;
+  title: string;
+  status: string;
+  lock_at: string | null;
+  vig_override: number | null;
+  selections: { id: string; label: string; american_odds: number }[];
 }
 
-function formatOdds(odds: number): string {
-  return odds > 0 ? `+${odds}` : `${odds}`;
+interface SuggestionRow {
+  accepted_market_id: string;
+  payload: MoneylinePayload;
 }
 
 export default async function AdminSuggestionsPage({
@@ -36,16 +32,59 @@ export default async function AdminSuggestionsPage({
   const supabase = await createClient();
   const week = Number(params.week) || (await getCurrentWeek(supabase, season));
 
-  const { data: suggestionsData } = await supabase
-    .from("suggestions")
-    .select("id, payload")
+  const { data: marketsData } = await supabase
+    .from("markets")
+    .select("id, title, status, lock_at, vig_override, selections(id, label, american_odds)")
     .eq("season", season)
     .eq("week", week)
     .eq("type", "moneyline")
-    .is("accepted_market_id", null)
     .order("created_at", { ascending: true });
 
-  const suggestions = (suggestionsData ?? []) as unknown as Suggestion[];
+  const { data: suggestionsData } = await supabase
+    .from("suggestions")
+    .select("accepted_market_id, payload")
+    .eq("season", season)
+    .eq("week", week)
+    .eq("type", "moneyline")
+    .not("accepted_market_id", "is", null);
+
+  const markets = (marketsData ?? []) as unknown as MarketRow[];
+  const suggestionByMarketId = new Map(
+    ((suggestionsData ?? []) as unknown as SuggestionRow[]).map((s) => [
+      s.accepted_market_id,
+      s.payload,
+    ]),
+  );
+
+  const rows: MoneylineDraftRow[] = markets
+    .map((m): MoneylineDraftRow | null => {
+      const payload = suggestionByMarketId.get(m.id);
+      const home = m.selections.find((s) => s.label === payload?.home_team_name);
+      const away = m.selections.find((s) => s.label === payload?.away_team_name);
+      if (!home || !away) return null; // labels edited away from the original pairing
+
+      return {
+        marketId: m.id,
+        title: m.title,
+        status: m.status,
+        lockAt: m.lock_at,
+        vigOverride: m.vig_override,
+        home: { selectionId: home.id, label: home.label, americanOdds: home.american_odds },
+        away: { selectionId: away.id, label: away.label, americanOdds: away.american_odds },
+        reference: payload
+          ? {
+              homeProjected: payload.home_projected,
+              awayProjected: payload.away_projected,
+              homeWinProbability: payload.home_win_probability,
+              homeFairOdds: payload.home_fair_odds,
+              awayFairOdds: payload.away_fair_odds,
+              suggestedHomeOdds: payload.home_odds,
+              suggestedAwayOdds: payload.away_odds,
+            }
+          : null,
+      };
+    })
+    .filter((r): r is MoneylineDraftRow => r !== null);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
@@ -77,54 +116,7 @@ export default async function AdminSuggestionsPage({
         </Button>
       </form>
 
-      <GenerateSuggestionsButton season={season} week={week} />
-
-      {suggestions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No pending suggestions for this week. Click Generate (make sure
-          ESPN has been synced for this week first).
-        </p>
-      ) : (
-        suggestions.map((s) => (
-          <Card key={s.id}>
-            <CardHeader>
-              <CardTitle className="text-base">
-                {s.payload.away_team_name} @ {s.payload.home_team_name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>
-                  {s.payload.home_team_name} (proj {s.payload.home_projected.toFixed(1)})
-                </span>
-                <span className="font-heading text-lg leading-none text-primary tabular-nums">
-                  {formatOdds(s.payload.home_odds)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>
-                  {s.payload.away_team_name} (proj {s.payload.away_projected.toFixed(1)})
-                </span>
-                <span className="font-heading text-lg leading-none text-primary tabular-nums">
-                  {formatOdds(s.payload.away_odds)}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <form action={acceptSuggestion.bind(null, s.id)}>
-                  <Button type="submit" size="sm">
-                    Accept (adds as a draft market)
-                  </Button>
-                </form>
-                <form action={dismissSuggestion.bind(null, s.id)}>
-                  <Button type="submit" size="sm" variant="outline">
-                    Dismiss
-                  </Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-        ))
-      )}
+      <MoneylineStudio season={season} week={week} rows={rows} />
     </div>
   );
 }
