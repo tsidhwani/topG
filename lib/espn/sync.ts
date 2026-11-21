@@ -73,6 +73,8 @@ export async function syncWeekBoxscore(supabase: SupabaseClient, week: number) {
         projected_points: p.projectedPoints,
         actual_points: p.actualPoints,
         is_final: p.actualPoints != null,
+        fantasy_team_id: p.fantasyTeamId,
+        injury_status: p.injuryStatus,
       })),
       { onConflict: "season,week,player_id" },
     );

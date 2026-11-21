@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
 import { MoneylineStudio } from "@/components/admin/moneyline-studio";
 import { TeamExtremesStudio } from "@/components/admin/team-extremes-studio";
+import { PlayerPropsStudio } from "@/components/admin/player-props-studio";
 import { MarketForm } from "@/components/admin/market-form";
+import { getEligiblePlayers } from "@/lib/actions/player-props";
 import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,18 @@ import type { MoneylinePayload } from "@/lib/actions/suggestions";
 import type { MoneylineDraftRow } from "@/components/admin/moneyline-row";
 import type { TeamExtremesPayload } from "@/lib/actions/team-extremes";
 import type { TeamExtremesDraftRow } from "@/components/admin/team-extremes-row";
+import type { PlayerPropDraftRow } from "@/components/admin/player-prop-row";
+
+interface H2hPayload {
+  player_a: { id: number; name: string; projected: number };
+  player_b: { id: number; name: string; projected: number };
+}
+
+interface OverUnderPayload {
+  player?: { id: number; name: string; projected: number };
+  players?: { id: number; name: string; projected: number }[];
+  line: number;
+}
 
 interface MarketRow {
   id: string;
@@ -152,6 +166,130 @@ async function loadTeamExtremesRows(
   });
 }
 
+async function loadPlayerPropRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  season: number,
+  week: number,
+): Promise<PlayerPropDraftRow[]> {
+  const { data: marketsData } = await supabase
+    .from("markets")
+    .select("id, title, status, lock_at, vig_override, selections(id, label, american_odds)")
+    .eq("season", season)
+    .eq("week", week)
+    .eq("type", "player_prop")
+    .order("created_at", { ascending: true });
+
+  const { data: suggestionsData } = await supabase
+    .from("suggestions")
+    .select("type, accepted_market_id, payload")
+    .eq("season", season)
+    .eq("week", week)
+    .in("type", ["player_prop_h2h", "player_prop_combo", "player_prop_single"])
+    .not("accepted_market_id", "is", null);
+
+  const { data: injuries } = await supabase
+    .from("espn_player_weeks")
+    .select("player_id, injury_status")
+    .eq("season", season)
+    .eq("week", week)
+    .not("injury_status", "is", null);
+  const injuryByPlayerId = new Map((injuries ?? []).map((i) => [i.player_id, i.injury_status]));
+
+  const markets = (marketsData ?? []) as unknown as MarketRow[];
+  const suggestionByMarketId = new Map(
+    (suggestionsData ?? []).map((s) => [s.accepted_market_id, s]),
+  );
+
+  return markets
+    .map((m): PlayerPropDraftRow | null => {
+      const suggestion = suggestionByMarketId.get(m.id);
+      if (!suggestion) return null;
+
+      if (suggestion.type === "player_prop_h2h") {
+        const payload = suggestion.payload as unknown as H2hPayload;
+        const aLabel = `${payload.player_a.name} to outscore ${payload.player_b.name}`;
+        const bLabel = `${payload.player_b.name} to outscore ${payload.player_a.name}`;
+        const first = m.selections.find((s) => s.label === aLabel);
+        const second = m.selections.find((s) => s.label === bLabel);
+        if (!first || !second) return null;
+
+        const injuryA = injuryByPlayerId.get(payload.player_a.id);
+        const injuryB = injuryByPlayerId.get(payload.player_b.id);
+
+        return {
+          marketId: m.id,
+          title: m.title,
+          status: m.status,
+          lockAt: m.lock_at,
+          vigOverride: m.vig_override,
+          hasLine: false,
+          line: null,
+          first: {
+            selectionId: first.id,
+            label: first.label,
+            americanOdds: first.american_odds,
+            playerName: payload.player_a.name,
+            projected: payload.player_a.projected,
+          },
+          second: {
+            selectionId: second.id,
+            label: second.label,
+            americanOdds: second.american_odds,
+            playerName: payload.player_b.name,
+            projected: payload.player_b.projected,
+          },
+          injuryNote:
+            injuryA || injuryB
+              ? `${injuryA ? `${payload.player_a.name}: ${injuryA}` : ""}${injuryA && injuryB ? " · " : ""}${injuryB ? `${payload.player_b.name}: ${injuryB}` : ""}`
+              : null,
+        };
+      }
+
+      // combo and single share the same Over/Under shape
+      const payload = suggestion.payload as unknown as OverUnderPayload;
+      const line = payload.line;
+      const over = m.selections.find((s) => s.label.startsWith("Over"));
+      const under = m.selections.find((s) => s.label.startsWith("Under"));
+      if (!over || !under) return null;
+
+      const players = payload.players ?? (payload.player ? [payload.player] : []);
+      const title =
+        suggestion.type === "player_prop_combo"
+          ? players.map((p) => p.name).join(" + ")
+          : (players[0]?.name ?? m.title);
+      const totalProjected = players.reduce((sum, p) => sum + p.projected, 0);
+      const injuryNotes = players
+        .filter((p) => injuryByPlayerId.get(p.id))
+        .map((p) => `${p.name}: ${injuryByPlayerId.get(p.id)}`);
+
+      return {
+        marketId: m.id,
+        title: m.title,
+        status: m.status,
+        lockAt: m.lock_at,
+        vigOverride: m.vig_override,
+        hasLine: true,
+        line,
+        first: {
+          selectionId: over.id,
+          label: over.label,
+          americanOdds: over.american_odds,
+          playerName: `Over — ${title}`,
+          projected: totalProjected,
+        },
+        second: {
+          selectionId: under.id,
+          label: under.label,
+          americanOdds: under.american_odds,
+          playerName: `Under — ${title}`,
+          projected: totalProjected,
+        },
+        injuryNote: injuryNotes.length > 0 ? injuryNotes.join(" · ") : null,
+      };
+    })
+    .filter((r): r is PlayerPropDraftRow => r !== null);
+}
+
 export default async function LinesStudioPage({
   searchParams,
 }: {
@@ -164,6 +302,14 @@ export default async function LinesStudioPage({
 
   const moneylineRows = await loadMoneylineRows(supabase, season, week);
   const teamExtremesRows = await loadTeamExtremesRows(supabase, season, week);
+  const playerPropRows = await loadPlayerPropRows(supabase, season, week);
+  const eligiblePlayers = await getEligiblePlayers(supabase, season, week);
+  const { data: fantasyTeamsData } = await supabase
+    .from("espn_teams")
+    .select("espn_team_id, name")
+    .eq("season", season)
+    .order("name", { ascending: true });
+  const fantasyTeams = (fantasyTeamsData ?? []).map((t) => ({ id: t.espn_team_id, name: t.name }));
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
@@ -208,7 +354,13 @@ export default async function LinesStudioPage({
         </TabsContent>
 
         <TabsContent value="player-props" className="flex flex-col gap-4 pt-4">
-          <p className="text-sm text-muted-foreground">Coming soon.</p>
+          <PlayerPropsStudio
+            season={season}
+            week={week}
+            rows={playerPropRows}
+            eligiblePlayers={eligiblePlayers}
+            fantasyTeams={fantasyTeams}
+          />
         </TabsContent>
 
         <TabsContent value="team-extremes" className="flex flex-col gap-4 pt-4">

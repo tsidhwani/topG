@@ -11,7 +11,7 @@ export const DEFAULT_STDDEV = 22;
 export const DEFAULT_VIG = 0.045;
 
 // Box-Muller transform for a standard normal sample.
-function randomNormal(mean: number, stddev: number): number {
+export function randomNormal(mean: number, stddev: number): number {
   const u1 = Math.random();
   const u2 = Math.random();
   const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);

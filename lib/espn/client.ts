@@ -195,6 +195,8 @@ export interface PlayerWeek {
   position: string;
   projectedPoints: number | null;
   actualPoints: number | null;
+  fantasyTeamId: number;
+  injuryStatus: string | null;
 }
 
 export interface WeekBoxscore {
@@ -211,6 +213,8 @@ interface RosterEntry {
       fullName: string;
       proTeamId: number;
       defaultPositionId: number;
+      injured?: boolean;
+      injuryStatus?: string;
       stats?: {
         scoringPeriodId: number;
         statSourceId: number; // 0 = actual, 1 = projected
@@ -256,6 +260,8 @@ export async function getWeekBoxscore(week: number): Promise<WeekBoxscore> {
           position: POSITIONS[player.defaultPositionId] ?? "UNKNOWN",
           projectedPoints: projected ?? null,
           actualPoints: actual ?? null,
+          fantasyTeamId: side.teamId,
+          injuryStatus: player.injuryStatus ?? null,
         });
 
         if (!NON_STARTING_SLOTS.has(entry.lineupSlotId)) {
