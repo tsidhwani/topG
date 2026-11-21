@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { sendMagicLink } from "@/lib/actions/auth";
+import { toast } from "sonner";
+import { sendMagicLink, requestAdminAccess } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,33 +10,40 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState<{
-    type: "error" | "success";
-    text: string;
-  } | null>(null);
+  const [showAdminOption, setShowAdminOption] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setMessage(null);
     startTransition(async () => {
       const result = await sendMagicLink(email);
-      setMessage(
-        result.error
-          ? { type: "error", text: result.error }
-          : { type: "success", text: "Check your email for a sign-in link." },
-      );
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Check your email for a sign-in link.");
+      }
+    });
+  }
+
+  function handleAdminRequest() {
+    startTransition(async () => {
+      const result = await requestAdminAccess(email);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Check your email to finish verifying admin access.");
+      }
     });
   }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6">
-      <div className="flex items-baseline gap-2">
+      <div className="flex flex-col items-center gap-1">
         <span className="font-heading text-5xl leading-none text-primary [text-shadow:0_0_24px_var(--primary)]">
           TOPG
         </span>
-        <span className="text-sm font-medium tracking-[0.25em] text-muted-foreground uppercase">
-          Sportsbook
+        <span className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
+          Good Lines, Better People
         </span>
       </div>
       <Card className="w-full max-w-sm">
@@ -58,18 +66,32 @@ export default function LoginPage() {
             <Button type="submit" disabled={isPending}>
               {isPending ? "Sending..." : "Send magic link"}
             </Button>
-            {message && (
-              <p
-                className={
-                  message.type === "error"
-                    ? "text-sm text-destructive"
-                    : "text-sm text-muted-foreground"
-                }
-              >
-                {message.text}
-              </p>
-            )}
           </form>
+
+          {showAdminOption ? (
+            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <p className="text-xs text-muted-foreground">
+                League admins only — verifies the same email above.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                onClick={handleAdminRequest}
+              >
+                Request admin access
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAdminOption(true)}
+              className="mt-4 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Admin? Request access instead
+            </button>
+          )}
         </CardContent>
       </Card>
     </div>
