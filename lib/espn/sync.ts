@@ -5,7 +5,7 @@ import {
   getTeams,
   getWeekBoxscore,
 } from "./client";
-import { autoGradeMoneylines } from "./autograde";
+import { autoGradeMoneylines, autoGradeTeamExtremes } from "./autograde";
 
 function season(): number {
   return Number(process.env.ESPN_SEASON);
@@ -141,10 +141,8 @@ export async function syncAll(supabase: SupabaseClient): Promise<SyncSummary> {
     playerWeeksSynced += await syncWeekBoxscore(supabase, week);
   }
 
-  const { marketsGraded, betsRegraded } = await autoGradeMoneylines(
-    supabase,
-    Number(process.env.ESPN_SEASON),
-  );
+  const moneylineGrades = await autoGradeMoneylines(supabase, yr);
+  const teamExtremeGrades = await autoGradeTeamExtremes(supabase, yr);
 
   return {
     teams,
@@ -152,8 +150,8 @@ export async function syncAll(supabase: SupabaseClient): Promise<SyncSummary> {
     currentWeek: status.currentMatchupPeriod,
     weeksSynced: weeksToSync,
     playerWeeksSynced,
-    marketsAutoGraded: marketsGraded,
-    betsRegraded,
+    marketsAutoGraded: moneylineGrades.marketsGraded + teamExtremeGrades.marketsGraded,
+    betsRegraded: moneylineGrades.betsRegraded + teamExtremeGrades.betsRegraded,
     syncedAt: new Date().toISOString(),
   };
 }

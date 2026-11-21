@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
 import { MoneylineStudio } from "@/components/admin/moneyline-studio";
+import { TeamExtremesStudio } from "@/components/admin/team-extremes-studio";
 import { MarketForm } from "@/components/admin/market-form";
 import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { MoneylinePayload } from "@/lib/actions/suggestions";
 import type { MoneylineDraftRow } from "@/components/admin/moneyline-row";
+import type { TeamExtremesPayload } from "@/lib/actions/team-extremes";
+import type { TeamExtremesDraftRow } from "@/components/admin/team-extremes-row";
 
 interface MarketRow {
   id: string;
@@ -84,6 +87,71 @@ async function loadMoneylineRows(
     .filter((r): r is MoneylineDraftRow => r !== null);
 }
 
+async function loadTeamExtremesRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  season: number,
+  week: number,
+): Promise<TeamExtremesDraftRow[]> {
+  const { data: marketsData } = await supabase
+    .from("markets")
+    .select("id, title, status, lock_at, vig_override, selections(id, label, american_odds)")
+    .eq("season", season)
+    .eq("week", week)
+    .eq("type", "team_prop")
+    .order("created_at", { ascending: true });
+
+  const { data: suggestionsData } = await supabase
+    .from("suggestions")
+    .select("accepted_market_id, payload")
+    .eq("season", season)
+    .eq("week", week)
+    .in("type", ["team_prop_highest", "team_prop_lowest"])
+    .not("accepted_market_id", "is", null);
+
+  const markets = (marketsData ?? []) as unknown as MarketRow[];
+  const payloadByMarketId = new Map(
+    ((suggestionsData ?? []) as unknown as SuggestionRow[]).map((s) => [
+      s.accepted_market_id,
+      s.payload as unknown as TeamExtremesPayload,
+    ]),
+  );
+
+  return markets.map((m): TeamExtremesDraftRow => {
+    const payload = payloadByMarketId.get(m.id);
+    const nameToTeamId = new Map(
+      (payload?.teams ?? []).map((t) => [t.team_name, t.team_id]),
+    );
+    const reference = payload
+      ? Object.fromEntries(
+          payload.teams.map((t) => [
+            t.team_id,
+            {
+              projected: t.projected,
+              probability: t.probability,
+              fairOdds: t.fair_odds,
+              suggestedOdds: t.suggested_odds,
+            },
+          ]),
+        )
+      : null;
+
+    return {
+      marketId: m.id,
+      title: m.title,
+      status: m.status,
+      lockAt: m.lock_at,
+      vigOverride: m.vig_override,
+      selections: m.selections.map((s) => ({
+        selectionId: s.id,
+        teamId: nameToTeamId.get(s.label) ?? -1,
+        label: s.label,
+        americanOdds: s.american_odds,
+      })),
+      reference,
+    };
+  });
+}
+
 export default async function LinesStudioPage({
   searchParams,
 }: {
@@ -95,6 +163,7 @@ export default async function LinesStudioPage({
   const week = Number(params.week) || (await getCurrentWeek(supabase, season));
 
   const moneylineRows = await loadMoneylineRows(supabase, season, week);
+  const teamExtremesRows = await loadTeamExtremesRows(supabase, season, week);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
@@ -143,7 +212,7 @@ export default async function LinesStudioPage({
         </TabsContent>
 
         <TabsContent value="team-extremes" className="flex flex-col gap-4 pt-4">
-          <p className="text-sm text-muted-foreground">Coming soon.</p>
+          <TeamExtremesStudio season={season} week={week} rows={teamExtremesRows} />
         </TabsContent>
 
         <TabsContent value="custom" className="flex flex-col gap-4 pt-4">
