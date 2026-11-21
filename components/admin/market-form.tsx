@@ -10,11 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const MARKET_TYPES = [
-  { value: "moneyline", label: "Moneyline" },
   { value: "spread", label: "Spread" },
   { value: "total", label: "Total" },
-  { value: "player_prop", label: "Player Prop" },
   { value: "future", label: "Future" },
+  { value: "moneyline", label: "Moneyline (manual)" },
+  { value: "player_prop", label: "Player Prop (manual)" },
+  { value: "team_prop", label: "Team Prop (manual)" },
 ];
 
 interface SelectionRow {

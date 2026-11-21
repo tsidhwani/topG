@@ -31,15 +31,13 @@ export default async function AppLayout({
             </span>
           </Link>
           <nav className="flex items-center gap-1">
-            <NavLink href="/">This Week</NavLink>
+            <NavLink href="/">Board</NavLink>
             <NavLink href="/my-bets">My Bets</NavLink>
+            <NavLink href="/league">League</NavLink>
             {profile.role === "admin" && (
               <>
                 <NavLink href="/admin/lines-studio">Lines Studio</NavLink>
-                <NavLink href="/admin/lines">Lines (old)</NavLink>
-                <NavLink href="/admin/suggestions">Suggestions (old)</NavLink>
-                <NavLink href="/admin/grading">Grading</NavLink>
-                <NavLink href="/admin/settlement">Settlement</NavLink>
+                <NavLink href="/admin/grade-settle">Grade &amp; Settle</NavLink>
                 <NavLink href="/admin/settings">Settings</NavLink>
               </>
             )}

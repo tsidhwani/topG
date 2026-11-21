@@ -4,44 +4,6 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 
-export async function upsertWeek(formData: FormData) {
-  await requireAdmin();
-
-  const season = Number(formData.get("season"));
-  const week = Number(formData.get("week"));
-  const lockAtRaw = formData.get("lock_at");
-  const lockAt =
-    typeof lockAtRaw === "string" && lockAtRaw
-      ? new Date(lockAtRaw).toISOString()
-      : null;
-
-  if (!Number.isInteger(season) || !Number.isInteger(week)) {
-    throw new Error("Season and week must be numbers");
-  }
-
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("weeks")
-    .select("season")
-    .eq("season", season)
-    .eq("week", week)
-    .maybeSingle();
-
-  const { error } = existing
-    ? await supabase
-        .from("weeks")
-        .update({ lock_at: lockAt })
-        .eq("season", season)
-        .eq("week", week)
-    : await supabase
-        .from("weeks")
-        .insert({ season, week, lock_at: lockAt, status: "draft" });
-
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/admin/lines");
-}
-
 export interface SelectionInput {
   label: string;
   americanOdds: number;
@@ -117,29 +79,5 @@ export async function createMarket(input: CreateMarketInput) {
 
   if (selectionsError) throw new Error(selectionsError.message);
 
-  revalidatePath("/admin/lines");
-}
-
-export async function publishWeek(season: number, week: number) {
-  await requireAdmin();
-  const supabase = await createClient();
-
-  const { error: marketsError } = await supabase
-    .from("markets")
-    .update({ status: "open" })
-    .eq("season", season)
-    .eq("week", week)
-    .eq("status", "draft");
-
-  if (marketsError) throw new Error(marketsError.message);
-
-  const { error: weekError } = await supabase
-    .from("weeks")
-    .update({ status: "open", lines_publish_at: new Date().toISOString() })
-    .eq("season", season)
-    .eq("week", week);
-
-  if (weekError) throw new Error(weekError.message);
-
-  revalidatePath("/admin/lines");
+  revalidatePath("/admin/lines-studio");
 }

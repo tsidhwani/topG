@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
 import { MoneylineStudio } from "@/components/admin/moneyline-studio";
 import { TeamExtremesStudio } from "@/components/admin/team-extremes-studio";
+import { TeamExtremesRow } from "@/components/admin/team-extremes-row";
 import { PlayerPropsStudio } from "@/components/admin/player-props-studio";
 import { MarketForm } from "@/components/admin/market-form";
 import { getEligiblePlayers } from "@/lib/actions/player-props";
@@ -52,6 +53,7 @@ async function loadMoneylineRows(
     .eq("season", season)
     .eq("week", week)
     .eq("type", "moneyline")
+    .eq("source", "suggested")
     .order("created_at", { ascending: true });
 
   const { data: suggestionsData } = await supabase
@@ -112,6 +114,7 @@ async function loadTeamExtremesRows(
     .eq("season", season)
     .eq("week", week)
     .eq("type", "team_prop")
+    .eq("source", "suggested")
     .order("created_at", { ascending: true });
 
   const { data: suggestionsData } = await supabase
@@ -177,6 +180,7 @@ async function loadPlayerPropRows(
     .eq("season", season)
     .eq("week", week)
     .eq("type", "player_prop")
+    .eq("source", "suggested")
     .order("created_at", { ascending: true });
 
   const { data: suggestionsData } = await supabase
@@ -290,6 +294,41 @@ async function loadPlayerPropRows(
     .filter((r): r is PlayerPropDraftRow => r !== null);
 }
 
+// Custom tab's own markets (manually built via MarketForm) use
+// TeamExtremesRow's generic N-selection editable-row support directly —
+// it already handles any selection count and only uses a numeric id for
+// an optional reference lookup, which Custom markets don't have.
+async function loadCustomMarketRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  season: number,
+  week: number,
+) {
+  const { data: marketsData } = await supabase
+    .from("markets")
+    .select("id, title, status, lock_at, vig_override, selections(id, label, american_odds)")
+    .eq("season", season)
+    .eq("week", week)
+    .eq("source", "manual")
+    .order("created_at", { ascending: true });
+
+  const markets = (marketsData ?? []) as unknown as MarketRow[];
+
+  return markets.map((m) => ({
+    marketId: m.id,
+    title: m.title,
+    status: m.status,
+    lockAt: m.lock_at,
+    vigOverride: m.vig_override,
+    selections: m.selections.map((s, i) => ({
+      selectionId: s.id,
+      teamId: i,
+      label: s.label,
+      americanOdds: s.american_odds,
+    })),
+    reference: null,
+  }));
+}
+
 export default async function LinesStudioPage({
   searchParams,
 }: {
@@ -310,6 +349,7 @@ export default async function LinesStudioPage({
     .eq("season", season)
     .order("name", { ascending: true });
   const fantasyTeams = (fantasyTeamsData ?? []).map((t) => ({ id: t.espn_team_id, name: t.name }));
+  const customRows = await loadCustomMarketRows(supabase, season, week);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
@@ -369,6 +409,9 @@ export default async function LinesStudioPage({
 
         <TabsContent value="custom" className="flex flex-col gap-4 pt-4">
           <MarketForm season={season} week={week} />
+          {customRows.map((row) => (
+            <TeamExtremesRow key={row.marketId} row={row} />
+          ))}
         </TabsContent>
       </Tabs>
     </div>
