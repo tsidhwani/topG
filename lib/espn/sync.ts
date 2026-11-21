@@ -120,6 +120,14 @@ export interface SyncSummary {
 // whose matchup just went final.
 export async function syncAll(supabase: SupabaseClient): Promise<SyncSummary> {
   const status = await getLeagueStatus();
+  const yr = season();
+
+  const { error: stateError } = await supabase.from("league_state").upsert(
+    { season: yr, current_week: status.currentMatchupPeriod, synced_at: new Date().toISOString() },
+    { onConflict: "season" },
+  );
+  if (stateError) throw new Error(`syncAll league_state: ${stateError.message}`);
+
   const teams = await syncTeams(supabase);
   const matchups = await syncMatchups(supabase);
 

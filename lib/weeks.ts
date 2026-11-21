@@ -1,10 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// The week to default admin pages to when no ?week= is given: the earliest
-// synced matchup that isn't final yet (the in-progress/upcoming week), or
-// the latest known week if the whole synced season is already final. Reads
-// only already-synced data, so it still works if ESPN itself is down.
-export async function getDefaultWeek(
+// Single source of truth for "what week is it." Backed by league_state,
+// which syncAll() keeps current from ESPN's own status.currentMatchupPeriod
+// on every sync (lib/espn/sync.ts). An admin override in that same row
+// takes priority when set (see Settings). Falls back to deriving a week
+// from already-synced matchup finality only if league_state has no row yet
+// (e.g. before the very first sync) -- keeps this resilient, never throws.
+export async function getCurrentWeek(
+  supabase: SupabaseClient,
+  season: number,
+): Promise<number> {
+  const { data: state } = await supabase
+    .from("league_state")
+    .select("current_week, current_week_override")
+    .eq("season", season)
+    .maybeSingle();
+
+  if (state) {
+    return state.current_week_override ?? state.current_week;
+  }
+
+  return deriveWeekFromMatchups(supabase, season);
+}
+
+async function deriveWeekFromMatchups(
   supabase: SupabaseClient,
   season: number,
 ): Promise<number> {
@@ -27,4 +46,16 @@ export async function getDefaultWeek(
     .maybeSingle();
 
   return latest?.week ?? 1;
+}
+
+export async function setCurrentWeekOverride(
+  supabase: SupabaseClient,
+  season: number,
+  week: number | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("league_state")
+    .update({ current_week_override: week })
+    .eq("season", season);
+  if (error) throw new Error(error.message);
 }

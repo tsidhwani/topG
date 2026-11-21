@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentWeek } from "@/lib/weeks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BetSlipProvider } from "@/components/betslip/bet-slip-context";
@@ -69,24 +70,33 @@ function MarketCard({ market }: { market: Market }) {
 
 export default async function ThisWeekPage() {
   const supabase = await createClient();
+  const season = Number(process.env.ESPN_SEASON) || new Date().getFullYear();
+  const week = await getCurrentWeek(supabase, season);
 
   const { data: weekRow } = await supabase
     .from("weeks")
     .select("season, week, status, lock_at")
-    .in("status", ["open", "locked"])
-    .order("season", { ascending: false })
-    .order("week", { ascending: false })
-    .limit(1)
+    .eq("season", season)
+    .eq("week", week)
     .maybeSingle();
 
-  if (!weekRow) {
+  const { data: openMarketsData } = await supabase
+    .from("markets")
+    .select("id")
+    .eq("season", season)
+    .eq("week", week)
+    .in("status", ["open", "locked"])
+    .limit(1);
+
+  if (!weekRow || !openMarketsData || openMarketsData.length === 0) {
     return (
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 p-6 pt-24 text-center">
         <h1 className="font-heading text-3xl text-primary">
-          No lines published yet
+          Week {week} lines aren&apos;t up yet
         </h1>
         <p className="text-sm text-muted-foreground">
-          Check back once the admins publish this week&apos;s board.
+          Lines usually drop Wednesday morning — check back then, or ping an
+          admin if it&apos;s later than that.
         </p>
         <p className="mt-4 text-xs tracking-[0.2em] text-muted-foreground/70 uppercase">
           Good Lines, Better People
