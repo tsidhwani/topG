@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
 import { simulateMoneyline } from "@/lib/suggestions/simulate";
+import { getPlayerTrends, type PlayerTrend } from "@/lib/insights/player-trends";
 import { PageHeading } from "@/components/page-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,13 +34,6 @@ interface LeaderboardEntry {
   wins: number;
   losses: number;
   biggestWin: number;
-}
-
-interface PlayerStat {
-  name: string;
-  position: string;
-  gamesPlayed: number;
-  avgDiff: number;
 }
 
 interface MatchupPreview {
@@ -171,33 +165,7 @@ export default async function LeaguePage() {
     });
 
   // --- Hot & cold players: avg(actual - projected) across final weeks ---
-  const { data: playerWeeksData } = await supabase
-    .from("espn_player_weeks")
-    .select("player_id, player_name, position, actual_points, projected_points")
-    .eq("season", season)
-    .eq("is_final", true)
-    .not("actual_points", "is", null)
-    .not("projected_points", "is", null);
-
-  const byPlayer = new Map<number, { name: string; position: string; diffs: number[] }>();
-  for (const p of playerWeeksData ?? []) {
-    const entry = byPlayer.get(p.player_id) ?? {
-      name: p.player_name,
-      position: p.position,
-      diffs: [] as number[],
-    };
-    entry.diffs.push(p.actual_points - p.projected_points);
-    byPlayer.set(p.player_id, entry);
-  }
-
-  const playerStats: PlayerStat[] = [...byPlayer.values()]
-    .filter((p) => p.diffs.length >= 3)
-    .map((p) => ({
-      name: p.name,
-      position: p.position,
-      gamesPlayed: p.diffs.length,
-      avgDiff: p.diffs.reduce((s, d) => s + d, 0) / p.diffs.length,
-    }));
+  const playerStats = await getPlayerTrends(supabase, season);
 
   const hotPlayers = [...playerStats].sort((a, b) => b.avgDiff - a.avgDiff).slice(0, 5);
   const coldPlayers = [...playerStats].sort((a, b) => a.avgDiff - b.avgDiff).slice(0, 5);
@@ -443,7 +411,7 @@ function PlayerStatRow({
   positive,
   stagger,
 }: {
-  player: PlayerStat;
+  player: PlayerTrend;
   positive: boolean;
   stagger: number;
 }) {
