@@ -95,7 +95,7 @@ export function BetSlipDrawer() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 shadow-[0_0_24px_-4px_var(--primary)] transition-transform hover:scale-105 active:scale-95" />
+          <Button className="animate-glow-pulse fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-transform hover:scale-105 active:scale-95" />
         }
       >
         Bet slip ({selections.length})
@@ -108,10 +108,11 @@ export function BetSlipDrawer() {
         </SheetHeader>
 
         <div className="flex flex-col gap-2 overflow-y-auto px-4">
-          {selections.map((s) => (
+          {selections.map((s, i) => (
             <div
               key={s.id}
-              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors"
+              className="stagger-in flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors"
+              style={{ "--stagger": `${i * 40}ms` } as React.CSSProperties}
             >
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground">

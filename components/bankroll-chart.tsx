@@ -1,3 +1,5 @@
+import { cn } from "cn";
+
 // A minimal hand-drawn SVG line chart — no charting library needed for
 // one line. Plots cumulative net (in cents) across a user's settled bets,
 // in placement order.
@@ -41,7 +43,7 @@ export function BankrollChart({ points }: { points: number[] }) {
       <path
         d={path}
         fill="none"
-        className={positive ? "stroke-primary" : "stroke-destructive"}
+        className={cn("draw-in", positive ? "stroke-primary" : "stroke-destructive")}
         strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
+import { cn } from "cn";
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "Locked";
@@ -17,24 +18,27 @@ function formatRemaining(ms: number): string {
 
 export function LockCountdown({ lockAt }: { lockAt: string }) {
   const target = new Date(lockAt).getTime();
-  const [label, setLabel] = useState(() => formatRemaining(target - Date.now()));
+  const [remainingMs, setRemainingMs] = useState(() => target - Date.now());
 
   useEffect(() => {
     const id = setInterval(() => {
-      setLabel(formatRemaining(target - Date.now()));
+      setRemainingMs(target - Date.now());
     }, 30_000);
     return () => clearInterval(id);
   }, [target]);
 
-  const locked = label === "Locked";
+  const label = formatRemaining(remainingMs);
+  const locked = remainingMs <= 0;
+  const urgent = !locked && remainingMs < 60 * 60_000;
 
   return (
     <span
-      className={
-        locked
-          ? "flex items-center gap-1 text-xs text-destructive"
-          : "flex items-center gap-1 text-xs text-muted-foreground"
-      }
+      className={cn(
+        "flex items-center gap-1 text-xs transition-colors",
+        locked && "text-destructive",
+        urgent && "animate-pulse text-destructive",
+        !locked && !urgent && "text-muted-foreground",
+      )}
     >
       <Clock className="size-3" />
       {label}

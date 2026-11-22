@@ -38,7 +38,8 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6">
-      <div className="flex flex-col items-center gap-1">
+      <div className="ambient-glow" aria-hidden />
+      <div className="animate-fade-up flex flex-col items-center gap-1">
         <span className="font-heading text-5xl leading-none text-primary [text-shadow:0_0_24px_var(--primary)]">
           TOPG
         </span>
@@ -46,7 +47,10 @@ export default function LoginPage() {
           Good Lines, Better People
         </span>
       </div>
-      <Card className="w-full max-w-sm">
+      <Card
+        className="stagger-in w-full max-w-sm"
+        style={{ "--stagger": "150ms" } as React.CSSProperties}
+      >
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
         </CardHeader>
@@ -69,7 +73,7 @@ export default function LoginPage() {
           </form>
 
           {showAdminOption ? (
-            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+            <div className="animate-fade-up mt-4 flex flex-col gap-2 border-t border-border pt-4">
               <p className="text-xs text-muted-foreground">
                 League admins only — verifies the same email above.
               </p>
@@ -87,7 +91,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowAdminOption(true)}
-              className="mt-4 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              className="mt-4 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             >
               Admin? Request access instead
             </button>

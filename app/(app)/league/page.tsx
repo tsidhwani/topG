@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkline } from "@/components/sparkline";
+import { ProbabilityBar } from "@/components/probability-bar";
 
 interface Standing {
   espn_team_id: number;
@@ -54,16 +55,6 @@ interface MatchupPreview {
 
 function centsToDollars(cents: number): string {
   return (cents / 100).toFixed(2);
-}
-
-function ProbabilityBar({ homeProbability }: { homeProbability: number }) {
-  const homePct = Math.round(homeProbability * 100);
-  return (
-    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
-      <div className="bg-primary" style={{ width: `${homePct}%` }} />
-      <div className="bg-muted-foreground/30" style={{ width: `${100 - homePct}%` }} />
-    </div>
-  );
 }
 
 export default async function LeaguePage() {
@@ -230,7 +221,11 @@ export default async function LeaguePage() {
             </p>
           ) : (
             matchupPreviews.map((m, i) => (
-              <Card key={i}>
+              <Card
+                key={i}
+                className="stagger-in transition-all duration-300 hover:-translate-y-0.5"
+                style={{ "--stagger": `${i * 70}ms` } as React.CSSProperties}
+              >
                 <CardContent className="flex flex-col gap-2 p-4">
                   <div className="flex items-center justify-between text-sm">
                     <span>{m.awayName}</span>
@@ -284,7 +279,10 @@ export default async function LeaguePage() {
                   </thead>
                   <tbody>
                     {standings.map((s) => (
-                      <tr key={s.espn_team_id} className="border-b last:border-0">
+                      <tr
+                        key={s.espn_team_id}
+                        className="border-b transition-colors last:border-0 hover:bg-muted/40"
+                      >
                         <td className="px-3 py-2">
                           <div>{s.name}</div>
                           {s.owner_name && (
@@ -327,7 +325,8 @@ export default async function LeaguePage() {
                   return (
                     <div
                       key={entry.name + i}
-                      className="flex flex-col gap-1 border-b pb-3 last:border-0 last:pb-0"
+                      className="stagger-in flex flex-col gap-1 border-b pb-3 transition-colors last:border-0 last:pb-0 hover:bg-muted/40"
+                      style={{ "--stagger": `${i * 50}ms` } as React.CSSProperties}
                     >
                       <div className="flex items-center justify-between text-sm">
                         <span>
@@ -370,8 +369,12 @@ export default async function LeaguePage() {
                   No final weeks synced yet.
                 </p>
               ) : (
-                teamTrends.map((t) => (
-                  <div key={t.name} className="flex items-center justify-between gap-3">
+                teamTrends.map((t, i) => (
+                  <div
+                    key={t.name}
+                    className="stagger-in flex items-center justify-between gap-3"
+                    style={{ "--stagger": `${i * 50}ms` } as React.CSSProperties}
+                  >
                     <div className="flex flex-col">
                       <span className="text-sm">{t.name}</span>
                       <span className="text-xs text-muted-foreground">
@@ -403,8 +406,8 @@ export default async function LeaguePage() {
                   Not enough final weeks yet.
                 </p>
               ) : (
-                hotPlayers.map((p) => (
-                  <PlayerStatRow key={p.name} player={p} positive />
+                hotPlayers.map((p, i) => (
+                  <PlayerStatRow key={p.name} player={p} positive stagger={i * 50} />
                 ))
               )}
             </CardContent>
@@ -423,8 +426,8 @@ export default async function LeaguePage() {
                   Not enough final weeks yet.
                 </p>
               ) : (
-                coldPlayers.map((p) => (
-                  <PlayerStatRow key={p.name} player={p} positive={false} />
+                coldPlayers.map((p, i) => (
+                  <PlayerStatRow key={p.name} player={p} positive={false} stagger={i * 50} />
                 ))
               )}
             </CardContent>
@@ -435,9 +438,20 @@ export default async function LeaguePage() {
   );
 }
 
-function PlayerStatRow({ player, positive }: { player: PlayerStat; positive: boolean }) {
+function PlayerStatRow({
+  player,
+  positive,
+  stagger,
+}: {
+  player: PlayerStat;
+  positive: boolean;
+  stagger: number;
+}) {
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div
+      className="stagger-in flex items-center justify-between text-sm"
+      style={{ "--stagger": `${stagger}ms` } as React.CSSProperties}
+    >
       <span>
         {player.name}{" "}
         <span className="text-xs text-muted-foreground">

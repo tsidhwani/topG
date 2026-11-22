@@ -35,9 +35,12 @@ function groupMarkets(markets: Market[]) {
   };
 }
 
-function MarketCard({ market }: { market: Market }) {
+function MarketCard({ market, stagger }: { market: Market; stagger: number }) {
   return (
-    <Card className="transition-shadow hover:shadow-[0_0_32px_-8px_var(--primary)]">
+    <Card
+      className="stagger-in transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_32px_-8px_var(--primary)]"
+      style={{ "--stagger": `${stagger}ms` } as React.CSSProperties}
+    >
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">{market.title}</CardTitle>
         <div className="flex flex-col items-end gap-1">
@@ -142,8 +145,8 @@ export default async function ThisWeekPage() {
             <h2 className="text-sm font-medium text-muted-foreground">
               Matchups
             </h2>
-            {matchups.map((m) => (
-              <MarketCard key={m.id} market={m} />
+            {matchups.map((m, i) => (
+              <MarketCard key={m.id} market={m} stagger={i * 60} />
             ))}
           </section>
         )}
@@ -153,8 +156,8 @@ export default async function ThisWeekPage() {
             <h2 className="text-sm font-medium text-muted-foreground">
               Player Props
             </h2>
-            {props.map((m) => (
-              <MarketCard key={m.id} market={m} />
+            {props.map((m, i) => (
+              <MarketCard key={m.id} market={m} stagger={i * 60} />
             ))}
           </section>
         )}
@@ -164,8 +167,8 @@ export default async function ThisWeekPage() {
             <h2 className="text-sm font-medium text-muted-foreground">
               Futures
             </h2>
-            {futures.map((m) => (
-              <MarketCard key={m.id} market={m} />
+            {futures.map((m, i) => (
+              <MarketCard key={m.id} market={m} stagger={i * 60} />
             ))}
           </section>
         )}

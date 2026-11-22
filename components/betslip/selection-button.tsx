@@ -17,10 +17,10 @@ export function SelectionButton({ selection }: { selection: SlipSelection }) {
       onClick={() => toggleSelection(selection)}
       aria-pressed={selected}
       className={cn(
-        "flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors",
+        "flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-all duration-150 active:scale-[0.98]",
         selected
-          ? "border-primary bg-primary/15"
-          : "border-border hover:bg-muted",
+          ? "border-primary bg-primary/15 shadow-[0_0_14px_-4px_var(--primary)]"
+          : "border-border hover:border-primary/40 hover:bg-muted",
       )}
     >
       <span>

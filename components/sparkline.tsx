@@ -33,7 +33,7 @@ export function Sparkline({
       <path
         d={path}
         fill="none"
-        className="stroke-primary"
+        className="draw-in stroke-primary"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

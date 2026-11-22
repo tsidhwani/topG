@@ -58,12 +58,15 @@ function canStillCancel(bet: Bet): boolean {
   });
 }
 
-function BetCard({ bet }: { bet: Bet }) {
+function BetCard({ bet, stagger }: { bet: Bet; stagger: number }) {
   const net = bet.potential_payout_cents - bet.stake_cents;
   const isSettled = bet.status !== "open";
 
   return (
-    <Card>
+    <Card
+      className="stagger-in transition-all duration-300 hover:-translate-y-0.5"
+      style={{ "--stagger": `${stagger}ms` } as React.CSSProperties}
+    >
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base capitalize">
           {bet.type} &mdash; ${centsToDollars(bet.stake_cents)}
@@ -153,7 +156,7 @@ export default async function MyBetsPage() {
       />
 
       {bankrollPoints.length > 2 && (
-        <Card>
+        <Card className="animate-fade-up">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               Bankroll over time
@@ -175,7 +178,7 @@ export default async function MyBetsPage() {
           {active.length === 0 ? (
             <p className="text-sm text-muted-foreground">No active bets.</p>
           ) : (
-            active.map((bet) => <BetCard key={bet.id} bet={bet} />)
+            active.map((bet, i) => <BetCard key={bet.id} bet={bet} stagger={i * 60} />)
           )}
         </TabsContent>
 
@@ -183,7 +186,7 @@ export default async function MyBetsPage() {
           {history.length === 0 ? (
             <p className="text-sm text-muted-foreground">No settled bets yet.</p>
           ) : (
-            history.map((bet) => <BetCard key={bet.id} bet={bet} />)
+            history.map((bet, i) => <BetCard key={bet.id} bet={bet} stagger={i * 60} />)
           )}
         </TabsContent>
       </Tabs>
