@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeading } from "@/components/page-heading";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sparkline } from "@/components/sparkline";
 
 interface Standing {
   espn_team_id: number;
@@ -19,6 +21,13 @@ interface BetRow {
   stake_cents: number;
   potential_payout_cents: number;
   profiles: { display_name: string } | null;
+}
+
+interface PlayerStat {
+  name: string;
+  position: string;
+  gamesPlayed: number;
+  avgDiff: number;
 }
 
 function centsToDollars(cents: number): string {
@@ -54,6 +63,62 @@ export default async function LeaguePage() {
   }
   const leaderboard = [...netByUser.values()].sort((a, b) => b.net - a.net);
 
+  // --- Team scoring trends: every final matchup's score, per team, by week ---
+  const { data: matchupsData } = await supabase
+    .from("espn_matchups")
+    .select("week, home_team_id, away_team_id, home_score, away_score")
+    .eq("season", season)
+    .eq("is_final", true)
+    .order("week", { ascending: true });
+
+  const scoresByTeam = new Map<number, number[]>();
+  for (const m of matchupsData ?? []) {
+    scoresByTeam.set(m.home_team_id, [...(scoresByTeam.get(m.home_team_id) ?? []), m.home_score]);
+    scoresByTeam.set(m.away_team_id, [...(scoresByTeam.get(m.away_team_id) ?? []), m.away_score]);
+  }
+
+  const teamTrends = standings
+    .map((s) => {
+      const history = scoresByTeam.get(s.espn_team_id) ?? [];
+      if (history.length === 0) return null;
+      const avg = history.reduce((sum, v) => sum + v, 0) / history.length;
+      const last = history[history.length - 1];
+      return { name: s.name, history, avg, trendingUp: last >= avg };
+    })
+    .filter((t): t is NonNullable<typeof t> => t !== null);
+
+  // --- Hot & cold players: avg(actual - projected) across final weeks ---
+  const { data: playerWeeksData } = await supabase
+    .from("espn_player_weeks")
+    .select("player_id, player_name, position, actual_points, projected_points")
+    .eq("season", season)
+    .eq("is_final", true)
+    .not("actual_points", "is", null)
+    .not("projected_points", "is", null);
+
+  const byPlayer = new Map<number, { name: string; position: string; diffs: number[] }>();
+  for (const p of playerWeeksData ?? []) {
+    const entry = byPlayer.get(p.player_id) ?? {
+      name: p.player_name,
+      position: p.position,
+      diffs: [] as number[],
+    };
+    entry.diffs.push(p.actual_points - p.projected_points);
+    byPlayer.set(p.player_id, entry);
+  }
+
+  const playerStats: PlayerStat[] = [...byPlayer.values()]
+    .filter((p) => p.diffs.length >= 3)
+    .map((p) => ({
+      name: p.name,
+      position: p.position,
+      gamesPlayed: p.diffs.length,
+      avgDiff: p.diffs.reduce((s, d) => s + d, 0) / p.diffs.length,
+    }));
+
+  const hotPlayers = [...playerStats].sort((a, b) => b.avgDiff - a.avgDiff).slice(0, 5);
+  const coldPlayers = [...playerStats].sort((a, b) => a.avgDiff - b.avgDiff).slice(0, 5);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <PageHeading title="League" />
@@ -61,7 +126,8 @@ export default async function LeaguePage() {
       <Tabs defaultValue="standings">
         <TabsList>
           <TabsTrigger value="standings">Standings</TabsTrigger>
-          <TabsTrigger value="leaderboard">Bettor Leaderboard</TabsTrigger>
+          <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
 
         <TabsContent value="standings" className="pt-4">
@@ -142,7 +208,96 @@ export default async function LeaguePage() {
             </Card>
           )}
         </TabsContent>
+
+        <TabsContent value="insights" className="flex flex-col gap-4 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Team Scoring Trends</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {teamTrends.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No final weeks synced yet.
+                </p>
+              ) : (
+                teamTrends.map((t) => (
+                  <div key={t.name} className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-sm">{t.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        avg {t.avg.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Sparkline values={t.history} />
+                      <Badge variant={t.trendingUp ? "default" : "secondary"}>
+                        {t.trendingUp ? "↑" : "↓"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Hot Players</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Beating their ESPN projection by the most, on average
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {hotPlayers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Not enough final weeks yet.
+                </p>
+              ) : (
+                hotPlayers.map((p) => (
+                  <PlayerStatRow key={p.name} player={p} positive />
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Cold Players</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Missing their ESPN projection by the most, on average
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {coldPlayers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Not enough final weeks yet.
+                </p>
+              ) : (
+                coldPlayers.map((p) => (
+                  <PlayerStatRow key={p.name} player={p} positive={false} />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function PlayerStatRow({ player, positive }: { player: PlayerStat; positive: boolean }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span>
+        {player.name}{" "}
+        <span className="text-xs text-muted-foreground">
+          ({player.position}, {player.gamesPlayed} games)
+        </span>
+      </span>
+      <span className={positive ? "text-green-600" : "text-destructive"}>
+        {player.avgDiff >= 0 ? "+" : ""}
+        {player.avgDiff.toFixed(1)}/wk
+      </span>
     </div>
   );
 }

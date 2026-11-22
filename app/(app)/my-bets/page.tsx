@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CancelBetButton } from "@/components/bets/cancel-bet-button";
 import { PageHeading } from "@/components/page-heading";
+import { BankrollChart } from "@/components/bankroll-chart";
 
 interface BetLeg {
   id: string;
@@ -120,6 +121,18 @@ export default async function MyBetsPage() {
     0,
   );
 
+  // Chronological order for the chart, not the newest-first order the list uses.
+  const chronological = [...history].sort(
+    (a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime(),
+  );
+  const bankrollPoints = chronological.reduce<number[]>(
+    (points, b) => [
+      ...points,
+      points[points.length - 1] + (b.potential_payout_cents - b.stake_cents),
+    ],
+    [0],
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <PageHeading
@@ -138,6 +151,19 @@ export default async function MyBetsPage() {
           </p>
         }
       />
+
+      {bankrollPoints.length > 2 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">
+              Bankroll over time
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BankrollChart points={bankrollPoints} />
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="active">
         <TabsList>
