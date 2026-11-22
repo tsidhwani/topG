@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentWeek } from "@/lib/weeks";
+import { simulateMoneyline } from "@/lib/suggestions/simulate";
 import { PageHeading } from "@/components/page-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +22,16 @@ interface BetRow {
   user_id: string;
   stake_cents: number;
   potential_payout_cents: number;
+  status: string;
   profiles: { display_name: string } | null;
+}
+
+interface LeaderboardEntry {
+  name: string;
+  net: number;
+  wins: number;
+  losses: number;
+  biggestWin: number;
 }
 
 interface PlayerStat {
@@ -30,13 +41,35 @@ interface PlayerStat {
   avgDiff: number;
 }
 
+interface MatchupPreview {
+  homeName: string;
+  awayName: string;
+  isFinal: boolean;
+  homeScore: number | null;
+  awayScore: number | null;
+  homeProjected: number | null;
+  awayProjected: number | null;
+  homeWinProbability: number | null;
+}
+
 function centsToDollars(cents: number): string {
   return (cents / 100).toFixed(2);
+}
+
+function ProbabilityBar({ homeProbability }: { homeProbability: number }) {
+  const homePct = Math.round(homeProbability * 100);
+  return (
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div className="bg-primary" style={{ width: `${homePct}%` }} />
+      <div className="bg-muted-foreground/30" style={{ width: `${100 - homePct}%` }} />
+    </div>
+  );
 }
 
 export default async function LeaguePage() {
   const supabase = await createClient();
   const season = Number(process.env.ESPN_SEASON) || new Date().getFullYear();
+  const currentWeek = await getCurrentWeek(supabase, season);
 
   const { data: standingsData } = await supabase
     .from("espn_teams")
@@ -45,34 +78,46 @@ export default async function LeaguePage() {
     .order("wins", { ascending: false })
     .order("points_for", { ascending: false });
   const standings = (standingsData ?? []) as Standing[];
+  const teamNameById = new Map(standings.map((s) => [s.espn_team_id, s.name]));
 
+  // --- Bettor leaderboard, with win rate and biggest single win ---
   const { data: betsData } = await supabase
     .from("bets")
-    .select("user_id, stake_cents, potential_payout_cents, profiles(display_name)")
+    .select("user_id, stake_cents, potential_payout_cents, status, profiles(display_name)")
     .neq("status", "open");
   const bets = (betsData ?? []) as unknown as BetRow[];
 
-  const netByUser = new Map<string, { name: string; net: number }>();
+  const leaderboardByUser = new Map<string, LeaderboardEntry>();
   for (const bet of bets) {
-    const entry = netByUser.get(bet.user_id) ?? {
+    const entry = leaderboardByUser.get(bet.user_id) ?? {
       name: bet.profiles?.display_name ?? "Unknown",
       net: 0,
+      wins: 0,
+      losses: 0,
+      biggestWin: 0,
     };
-    entry.net += bet.potential_payout_cents - bet.stake_cents;
-    netByUser.set(bet.user_id, entry);
+    const betNet = bet.potential_payout_cents - bet.stake_cents;
+    entry.net += betNet;
+    if (bet.status === "won") {
+      entry.wins += 1;
+      entry.biggestWin = Math.max(entry.biggestWin, betNet);
+    } else if (bet.status === "lost") {
+      entry.losses += 1;
+    }
+    leaderboardByUser.set(bet.user_id, entry);
   }
-  const leaderboard = [...netByUser.values()].sort((a, b) => b.net - a.net);
+  const leaderboard = [...leaderboardByUser.values()].sort((a, b) => b.net - a.net);
 
   // --- Team scoring trends: every final matchup's score, per team, by week ---
   const { data: matchupsData } = await supabase
     .from("espn_matchups")
-    .select("week, home_team_id, away_team_id, home_score, away_score")
+    .select("week, home_team_id, away_team_id, home_score, away_score, home_projected, away_projected, is_final")
     .eq("season", season)
-    .eq("is_final", true)
     .order("week", { ascending: true });
 
   const scoresByTeam = new Map<number, number[]>();
   for (const m of matchupsData ?? []) {
+    if (!m.is_final) continue;
     scoresByTeam.set(m.home_team_id, [...(scoresByTeam.get(m.home_team_id) ?? []), m.home_score]);
     scoresByTeam.set(m.away_team_id, [...(scoresByTeam.get(m.away_team_id) ?? []), m.away_score]);
   }
@@ -86,6 +131,53 @@ export default async function LeaguePage() {
       return { name: s.name, history, avg, trendingUp: last >= avg };
     })
     .filter((t): t is NonNullable<typeof t> => t !== null);
+
+  // --- This week's matchup previews: pure info, reusing the odds engine
+  // without creating any market/selection rows ---
+  const matchupPreviews: MatchupPreview[] = (matchupsData ?? [])
+    .filter((m) => m.week === currentWeek)
+    .map((m) => {
+      const homeName = teamNameById.get(m.home_team_id) ?? `Team ${m.home_team_id}`;
+      const awayName = teamNameById.get(m.away_team_id) ?? `Team ${m.away_team_id}`;
+
+      if (m.is_final) {
+        return {
+          homeName,
+          awayName,
+          isFinal: true,
+          homeScore: m.home_score,
+          awayScore: m.away_score,
+          homeProjected: null,
+          awayProjected: null,
+          homeWinProbability: null,
+        };
+      }
+
+      if (m.home_projected == null || m.away_projected == null) {
+        return {
+          homeName,
+          awayName,
+          isFinal: false,
+          homeScore: null,
+          awayScore: null,
+          homeProjected: null,
+          awayProjected: null,
+          homeWinProbability: null,
+        };
+      }
+
+      const sim = simulateMoneyline(m.home_projected, m.away_projected, undefined, 0);
+      return {
+        homeName,
+        awayName,
+        isFinal: false,
+        homeScore: null,
+        awayScore: null,
+        homeProjected: m.home_projected,
+        awayProjected: m.away_projected,
+        homeWinProbability: sim.homeWinProbability,
+      };
+    });
 
   // --- Hot & cold players: avg(actual - projected) across final weeks ---
   const { data: playerWeeksData } = await supabase
@@ -123,12 +215,55 @@ export default async function LeaguePage() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <PageHeading title="League" />
 
-      <Tabs defaultValue="standings">
+      <Tabs defaultValue="matchups">
         <TabsList>
+          <TabsTrigger value="matchups">Matchups</TabsTrigger>
           <TabsTrigger value="standings">Standings</TabsTrigger>
           <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="matchups" className="flex flex-col gap-3 pt-4">
+          {matchupPreviews.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No matchups synced for week {currentWeek} yet.
+            </p>
+          ) : (
+            matchupPreviews.map((m, i) => (
+              <Card key={i}>
+                <CardContent className="flex flex-col gap-2 p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{m.awayName}</span>
+                    <span className="text-xs text-muted-foreground">@</span>
+                    <span>{m.homeName}</span>
+                  </div>
+                  {m.isFinal ? (
+                    <div className="flex items-center justify-between font-heading text-lg text-primary">
+                      <span>{m.awayScore?.toFixed(1)}</span>
+                      <Badge variant="outline" className="text-xs">
+                        Final
+                      </Badge>
+                      <span>{m.homeScore?.toFixed(1)}</span>
+                    </div>
+                  ) : m.homeWinProbability != null ? (
+                    <>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{m.awayProjected?.toFixed(1)} proj</span>
+                        <span>{((1 - m.homeWinProbability) * 100).toFixed(0)}% / {(m.homeWinProbability * 100).toFixed(0)}%</span>
+                        <span>{m.homeProjected?.toFixed(1)} proj</span>
+                      </div>
+                      <ProbabilityBar homeProbability={m.homeWinProbability} />
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Projections not synced yet.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
 
         <TabsContent value="standings" className="pt-4">
           {standings.length === 0 ? (
@@ -185,25 +320,40 @@ export default async function LeaguePage() {
             </p>
           ) : (
             <Card>
-              <CardContent className="flex flex-col gap-2 p-4">
-                {leaderboard.map((entry, i) => (
-                  <div
-                    key={entry.name + i}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span>
-                      <span className="text-muted-foreground">{i + 1}.</span>{" "}
-                      {entry.name}
-                    </span>
-                    <span
-                      className={
-                        entry.net >= 0 ? "text-green-600" : "text-destructive"
-                      }
+              <CardContent className="flex flex-col gap-3 p-4">
+                {leaderboard.map((entry, i) => {
+                  const decided = entry.wins + entry.losses;
+                  const winRate = decided > 0 ? Math.round((entry.wins / decided) * 100) : null;
+                  return (
+                    <div
+                      key={entry.name + i}
+                      className="flex flex-col gap-1 border-b pb-3 last:border-0 last:pb-0"
                     >
-                      {entry.net >= 0 ? "+" : "-"}${centsToDollars(Math.abs(entry.net))}
-                    </span>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between text-sm">
+                        <span>
+                          <span className="text-muted-foreground">{i + 1}.</span>{" "}
+                          {entry.name}
+                        </span>
+                        <span
+                          className={
+                            entry.net >= 0 ? "text-green-600" : "text-destructive"
+                          }
+                        >
+                          {entry.net >= 0 ? "+" : "-"}${centsToDollars(Math.abs(entry.net))}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          {entry.wins}-{entry.losses}
+                          {winRate != null ? ` (${winRate}%)` : ""}
+                        </span>
+                        {entry.biggestWin > 0 && (
+                          <span>Biggest win: +${centsToDollars(entry.biggestWin)}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           )}
