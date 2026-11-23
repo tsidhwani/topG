@@ -60,6 +60,42 @@ export function simulateMoneyline(
   };
 }
 
+// Closed-form equivalent of simulateMoneyline's win probability, used where
+// determinism matters more than matching the exact suggestion-engine code
+// path (e.g. retroactively scoring *already-played* games for season
+// awards) — same normal-distribution model, just the analytic CDF instead
+// of sampling, so it's exact and side-effect-free.
+function erf(x: number): number {
+  // Abramowitz & Stegun 7.1.26, |error| < 1.5e-7.
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x);
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const t = 1 / (1 + p * ax);
+  const y =
+    1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-ax * ax);
+  return sign * y;
+}
+
+function normalCdf(x: number): number {
+  return 0.5 * (1 + erf(x / Math.SQRT2));
+}
+
+export function homeWinProbabilityAnalytic(
+  homeProjected: number,
+  awayProjected: number,
+  stddev: number = DEFAULT_STDDEV,
+): number {
+  const meanDiff = homeProjected - awayProjected;
+  const sdDiff = stddev * Math.SQRT2;
+  if (sdDiff === 0) return meanDiff > 0 ? 1 : meanDiff < 0 ? 0 : 0.5;
+  return normalCdf(meanDiff / sdDiff);
+}
+
 const TEAM_EXTREME_SIMULATIONS = 20_000;
 
 export interface TeamProjection {

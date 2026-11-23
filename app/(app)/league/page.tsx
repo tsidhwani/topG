@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWeek } from "@/lib/weeks";
 import { simulateMoneyline } from "@/lib/suggestions/simulate";
 import { getPlayerTrends, type PlayerTrend } from "@/lib/insights/player-trends";
+import { computeSeasonAwards, type FinalMatchup } from "@/lib/insights/season-awards";
 import { PageHeading } from "@/components/page-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +117,21 @@ export default async function LeaguePage() {
       return { name: s.name, history, avg, trendingUp: last >= avg };
     })
     .filter((t): t is NonNullable<typeof t> => t !== null);
+
+  // --- Season awards: biggest blowout/upset/closest game, top/bottom
+  // single-week score, across every final matchup so far ---
+  const finalMatchups: FinalMatchup[] = (matchupsData ?? [])
+    .filter((m) => m.is_final)
+    .map((m) => ({
+      week: m.week,
+      homeTeamId: m.home_team_id,
+      awayTeamId: m.away_team_id,
+      homeScore: m.home_score,
+      awayScore: m.away_score,
+      homeProjected: m.home_projected,
+      awayProjected: m.away_projected,
+    }));
+  const seasonAwards = computeSeasonAwards(finalMatchups, teamNameById);
 
   // --- This week's matchup previews: pure info, reusing the odds engine
   // without creating any market/selection rows ---
@@ -329,6 +345,72 @@ export default async function LeaguePage() {
         <TabsContent value="insights" className="flex flex-col gap-4 pt-4">
           <Card>
             <CardHeader>
+              <CardTitle className="text-base">Season Awards</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Superlatives from every final week so far
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {!seasonAwards.biggestBlowout &&
+              !seasonAwards.closestGame &&
+              !seasonAwards.topScore ? (
+                <p className="text-sm text-muted-foreground">
+                  No final weeks synced yet.
+                </p>
+              ) : (
+                <>
+                  {seasonAwards.biggestBlowout && (
+                    <AwardRow
+                      icon="💥"
+                      label="Biggest blowout"
+                      stagger={0}
+                      detail={`Week ${seasonAwards.biggestBlowout.week} — ${seasonAwards.biggestBlowout.winner} ${seasonAwards.biggestBlowout.winnerScore.toFixed(1)}, ${seasonAwards.biggestBlowout.loser} ${seasonAwards.biggestBlowout.loserScore.toFixed(1)}`}
+                      sub={`Margin: ${seasonAwards.biggestBlowout.margin.toFixed(1)} pts`}
+                    />
+                  )}
+                  {seasonAwards.biggestUpset && (
+                    <AwardRow
+                      icon="😱"
+                      label="Biggest upset"
+                      stagger={60}
+                      detail={`Week ${seasonAwards.biggestUpset.week} — ${seasonAwards.biggestUpset.winner} beat ${seasonAwards.biggestUpset.loser}`}
+                      sub={`Pregame win chance: ${Math.round(seasonAwards.biggestUpset.winnerPregameWinProbability * 100)}%`}
+                    />
+                  )}
+                  {seasonAwards.closestGame && (
+                    <AwardRow
+                      icon="🤏"
+                      label="Closest game"
+                      stagger={120}
+                      detail={`Week ${seasonAwards.closestGame.week} — ${seasonAwards.closestGame.teamA} ${seasonAwards.closestGame.teamAScore.toFixed(1)}, ${seasonAwards.closestGame.teamB} ${seasonAwards.closestGame.teamBScore.toFixed(1)}`}
+                      sub={`Margin: ${seasonAwards.closestGame.margin.toFixed(1)} pts`}
+                    />
+                  )}
+                  {seasonAwards.topScore && (
+                    <AwardRow
+                      icon="🚀"
+                      label="Highest single-week score"
+                      stagger={180}
+                      detail={`${seasonAwards.topScore.team} — ${seasonAwards.topScore.score.toFixed(1)} pts`}
+                      sub={`Week ${seasonAwards.topScore.week}`}
+                    />
+                  )}
+                  {seasonAwards.bottomScore && (
+                    <AwardRow
+                      icon="🪑"
+                      label="Lowest single-week score"
+                      stagger={240}
+                      detail={`${seasonAwards.bottomScore.team} — ${seasonAwards.bottomScore.score.toFixed(1)} pts`}
+                      sub={`Week ${seasonAwards.bottomScore.week}`}
+                    />
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="text-base">Team Scoring Trends</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -402,6 +484,36 @@ export default async function LeaguePage() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function AwardRow({
+  icon,
+  label,
+  detail,
+  sub,
+  stagger,
+}: {
+  icon: string;
+  label: string;
+  detail: string;
+  sub: string;
+  stagger: number;
+}) {
+  return (
+    <div
+      className="stagger-in flex items-start gap-3 border-b pb-3 last:border-0 last:pb-0"
+      style={{ "--stagger": `${stagger}ms` } as React.CSSProperties}
+    >
+      <span className="text-xl leading-none">{icon}</span>
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground uppercase tracking-wide">
+          {label}
+        </span>
+        <span className="text-sm">{detail}</span>
+        <span className="text-xs text-primary">{sub}</span>
+      </div>
     </div>
   );
 }

@@ -58,6 +58,34 @@ function canStillCancel(bet: Bet): boolean {
   });
 }
 
+function StatPill({
+  icon,
+  label,
+  value,
+  sub,
+  stagger,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  sub?: string;
+  stagger: number;
+}) {
+  return (
+    <div
+      className="neon-panel stagger-in flex flex-col gap-0.5 rounded-xl bg-card/70 p-3 transition-transform duration-300 hover:-translate-y-0.5"
+      style={{ "--stagger": `${stagger}ms` } as React.CSSProperties}
+    >
+      <span className="flex items-center gap-1 text-xs text-muted-foreground uppercase tracking-wide">
+        <span>{icon}</span>
+        {label}
+      </span>
+      <span className="font-heading text-lg text-primary">{value}</span>
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+    </div>
+  );
+}
+
 function BetCard({ bet, stagger }: { bet: Bet; stagger: number }) {
   const net = bet.potential_payout_cents - bet.stake_cents;
   const isSettled = bet.status !== "open";
@@ -124,6 +152,27 @@ export default async function MyBetsPage() {
     0,
   );
 
+  const decidedBets = history.filter((b) => b.status === "won" || b.status === "lost");
+  const wins = decidedBets.filter((b) => b.status === "won").length;
+  const losses = decidedBets.filter((b) => b.status === "lost").length;
+  const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : null;
+  const biggestWin = history
+    .filter((b) => b.status === "won")
+    .reduce((max, b) => Math.max(max, b.potential_payout_cents - b.stake_cents), 0);
+
+  // history is already newest-first, so the streak is just how many of the
+  // most recent decided bets (skipping push/void) share the same result.
+  let streak: { type: "won" | "lost"; count: number } | null = null;
+  if (decidedBets.length > 0) {
+    const type = decidedBets[0].status as "won" | "lost";
+    let count = 0;
+    for (const b of decidedBets) {
+      if (b.status !== type) break;
+      count += 1;
+    }
+    streak = { type, count };
+  }
+
   // Chronological order for the chart, not the newest-first order the list uses.
   const chronological = [...history].sort(
     (a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime(),
@@ -154,6 +203,36 @@ export default async function MyBetsPage() {
           </p>
         }
       />
+
+      {(winRate != null || biggestWin > 0 || streak) && (
+        <div className="grid grid-cols-3 gap-2">
+          {winRate != null && (
+            <StatPill
+              icon="📊"
+              label="Win rate"
+              value={`${winRate}%`}
+              sub={`${wins}-${losses}`}
+              stagger={0}
+            />
+          )}
+          {biggestWin > 0 && (
+            <StatPill
+              icon="💰"
+              label="Biggest win"
+              value={`+$${centsToDollars(biggestWin)}`}
+              stagger={80}
+            />
+          )}
+          {streak && streak.count > 0 && (
+            <StatPill
+              icon={streak.type === "won" ? "🔥" : "🥶"}
+              label="Streak"
+              value={`${streak.count}${streak.type === "won" ? "W" : "L"}`}
+              stagger={160}
+            />
+          )}
+        </div>
+      )}
 
       {bankrollPoints.length > 2 && (
         <Card className="animate-fade-up">

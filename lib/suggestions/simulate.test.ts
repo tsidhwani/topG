@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { americanOddsToProbability, probabilityToAmericanOdds } from "@/lib/odds";
-import { simulateMoneyline, simulateTeamExtremes } from "./simulate";
+import {
+  homeWinProbabilityAnalytic,
+  simulateMoneyline,
+  simulateTeamExtremes,
+} from "./simulate";
 
 describe("simulateMoneyline", () => {
   it("heavily favors the team projected much higher", () => {
@@ -37,6 +41,32 @@ describe("simulateMoneyline", () => {
       expect(run.homeWinProbability).toBeGreaterThan(0.5);
       expect(run.homeWinProbability).toBeLessThan(0.85);
     }
+  });
+});
+
+describe("homeWinProbabilityAnalytic", () => {
+  it("is exactly 0.5 for identical projections", () => {
+    expect(homeWinProbabilityAnalytic(120, 120, 22)).toBeCloseTo(0.5, 6);
+  });
+
+  it("approaches 1 for a large projected gap", () => {
+    expect(homeWinProbabilityAnalytic(200, 90, 22)).toBeGreaterThan(0.99);
+  });
+
+  it("approaches 0 for a large negative gap", () => {
+    expect(homeWinProbabilityAnalytic(90, 200, 22)).toBeLessThan(0.01);
+  });
+
+  it("is symmetric: swapping home/away gives the complementary probability", () => {
+    const home = homeWinProbabilityAnalytic(130, 115, 22);
+    const away = homeWinProbabilityAnalytic(115, 130, 22);
+    expect(home + away).toBeCloseTo(1, 6);
+  });
+
+  it("agrees closely with the Monte Carlo simulation for the same inputs", () => {
+    const analytic = homeWinProbabilityAnalytic(130, 115, 22);
+    const sampled = simulateMoneyline(130, 115, 22, 0).homeWinProbability;
+    expect(Math.abs(analytic - sampled)).toBeLessThan(0.03);
   });
 });
 
